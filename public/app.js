@@ -9,6 +9,7 @@ const previewText = document.getElementById("previewText");
 const previewQuote = document.getElementById("previewQuote");
 const result = document.getElementById("result");
 const replyEl = document.getElementById("reply");
+const toneChip = document.getElementById("toneChip");
 const modelNote = document.getElementById("modelNote");
 const copyBtn = document.getElementById("copy");
 const tweetBtn = document.getElementById("tweet");
@@ -49,11 +50,18 @@ function showPost(post) {
   }
 }
 
-function showReply(reply, post, usedFallback, model) {
+function showReply(reply, post, usedFallback, model, detectedTone) {
   lastReply = reply;
   lastPostId = post && post.id ? post.id : lastPostId;
   result.hidden = false;
   replyEl.textContent = reply;
+  if (detectedTone) {
+    toneChip.hidden = false;
+    toneChip.textContent = detectedTone;
+  } else {
+    toneChip.hidden = true;
+    toneChip.textContent = "";
+  }
   if (usedFallback) {
     modelNote.hidden = false;
     modelNote.textContent = "used the lighter model this time (gpt-oss-20b)";
@@ -97,7 +105,7 @@ async function generate(isRegen) {
       showError(data.error || "Couldn't write a reply just now. Try again.");
       return;
     }
-    showReply(data.reply, data.post, data.usedFallback, data.model);
+    showReply(data.reply, data.post, data.usedFallback, data.model, data.detectedTone);
   } catch {
     showError("Network error. Check your connection and try again.");
   } finally {

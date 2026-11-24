@@ -150,26 +150,64 @@ async function fetchPost(parsed: { id: string; handle: string; url: string }): P
   return null;
 }
 
-function toneHint(tone: string) {
-  switch (tone) {
+const POST_TONES: Record<string, string> = {
+  joke: "joke",
+  win: "win",
+  celebration: "win",
+  "win/celebration": "win",
+  sad: "sad",
+  loss: "sad",
+  "sad/loss": "sad",
+  rant: "rant",
+  news: "news",
+  question: "question",
+  advice: "advice",
+  shill: "shill",
+  promo: "shill",
+  "shill/promo": "shill",
+  "hot take": "hot take",
+  hottake: "hot take",
+  "hot-take": "hot take",
+};
+
+function normalizePostTone(raw: string) {
+  const key = raw.trim().toLowerCase().replace(/[_]+/g, " ").replace(/\s+/g, " ");
+  return POST_TONES[key] || "";
+}
+
+function toneHint(mode: string) {
+  switch (mode) {
     case "funny":
-      return "tone: funny. still lowercase and deadpan. one line, 3-12 words.";
+      return "style override: funnier. still lowercase and deadpan. one line, 5-6 words, no period.";
     case "insightful":
-      return "tone: insightful. 1-2 short sentences. add the missed insight.";
+      return "style override: insightful. 1-2 short sentences. add the missed insight.";
     case "supportive":
-      return "tone: supportive and warm, not sycophantic. 1-2 short sentences.";
+      return "style override: supportive and warm, not sycophantic. 1-2 short sentences.";
     default:
-      return "tone: francis default. one line, 3-12 words. deadpan.";
+      return "style: francis. match the classified post tone. exactly 5 or 6 words, one line, no period.";
   }
 }
 
 const SYSTEM = `You write a single X reply as Francis (@FrancisJD13).
-Voice: all lowercase. deadpan funny but truthful. plain english only, no pidgin or slang. no hashtags, no brackets, almost no emojis. positive. add one insight the original post missed. never beg for follows. never just agree. end on a statement, not a question. never invent facts, names, or numbers.
-Return JSON only: {"reply":"..."}`;
+First classify the post tone as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
+Then write one reply that matches that tone:
+- joke: play along with the joke
+- win: hype or congratulate dryly
+- sad: supportive
+- rant: agree with a dry twist
+- news: quick witty reaction
+- question: answer directly
+- advice: add one sharp point
+- shill: dry and honest, not hype
+- hot take: match the energy with a sharper angle, not a plain agree
+Hard rules: all lowercase, exactly 5 or 6 words, one line, no period, no hashtags, no brackets, no questions. almost no emojis; 😭 is ok rarely if it fits. plain english, no pidgin; you may lightly mirror the post's energy or slang level but stay in plain english. truthful, no invented facts, names, or numbers. never beg for follows. never just agree. end on a statement.
+Return JSON only: {"tone":"...","reply":"..."}`;
 
 function cleanReply(s: string) {
   let t = s.trim().replace(/^["']|["']$/g, "").trim();
-  t = t.replace(/#[\w_]+/g, "").replace(/\s+/g, " ").trim();
+  t = t.replace(/#[\w_]+/g, "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  t = t.toLowerCase();
+  t = t.replace(/[.]+$/g, "").trim();
   return t;
 }
 
@@ -202,14 +240,17 @@ async function groqChat(model: string, user: string) {
   }
 }
 
-function parseModelReply(raw: string): string {
+function parseModelReply(raw: string): { reply: string; tone: string } {
   try {
     const d = JSON.parse(raw);
     const content = d?.choices?.[0]?.message?.content || "";
     const o = typeof content === "string" ? JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) : content;
-    return cleanReply(typeof o?.reply === "string" ? o.reply : "");
+    return {
+      reply: cleanReply(typeof o?.reply === "string" ? o.reply : ""),
+      tone: normalizePostTone(typeof o?.tone === "string" ? o.tone : ""),
+    };
   } catch {
-    return "";
+    return { reply: "", tone: "" };
   }
 }
 
@@ -283,11 +324,12 @@ export default async (req: Request) => {
   if (result.status !== 200) {
     return json({ error: "Couldn't write a reply just now. Try again." }, 502);
   }
-  const reply = parseModelReply(result.raw);
-  if (!reply) return json({ error: "Couldn't write a reply just now. Try again." }, 502);
+  const parsedReply = parseModelReply(result.raw);
+  if (!parsedReply.reply) return json({ error: "Couldn't write a reply just now. Try again." }, 502);
   return json({
     post,
-    reply,
+    reply: parsedReply.reply,
+    detectedTone: parsedReply.tone,
     model,
     usedFallback,
   });
