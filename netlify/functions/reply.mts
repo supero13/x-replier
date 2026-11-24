@@ -8,7 +8,7 @@ const TEXT_MAX = 2000;
 const BODY_MAX = 4000;
 const TONES = new Set(["francis", "funny", "insightful", "supportive"]);
 const HOST_RE = /^(www\.|mobile\.)?(x\.com|twitter\.com)$/i;
-const STATUS_RE = /\/status(?:es)?\/(\d{5,20})(?:[/?#]|$)/i;
+const STATUS_RE = /\/status(?:es)?\/(\d{2,20})(?:[/?#]|$)/i;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

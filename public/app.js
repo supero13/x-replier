@@ -126,7 +126,7 @@ copyBtn.addEventListener("click", async () => {
 
 function extractXUrl(s) {
   if (!s) return "";
-  const m = String(s).match(/https?:\/\/(?:www\.|mobile\.)?(?:x\.com|twitter\.com)\/[^\s]+\/status(?:es)?\/\d{5,20}[^\s]*/i);
+  const m = String(s).match(/https?:\/\/(?:www\.|mobile\.)?(?:x\.com|twitter\.com)\/[^\s]+\/status(?:es)?\/\d{2,20}[^\s]*/i);
   return m ? m[0] : "";
 }
 
