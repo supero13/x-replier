@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ff4d8d" />
+    <meta name="description" content="Paste an X link and get one reply in Francis's voice." />
+    <title>Francis Replies</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon-192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">for @FrancisJD13</p>
+      <h1>francis replies</h1>
+      <p class="lede">paste an X link. get one reply in your voice. nothing posts itself.</p>
+      <form id="form">
+        <label>post link
+          <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://x.com/someone/status/…" />
+        </label>
+        <fieldset class="tones">
+          <legend>tone</legend>
+          <button type="button" data-tone="francis" aria-pressed="true">francis</button>
+          <button type="button" data-tone="funny" aria-pressed="false">funny</button>
+          <button type="button" data-tone="insightful" aria-pressed="false">insightful</button>
+          <button type="button" data-tone="supportive" aria-pressed="false">supportive</button>
+        </fieldset>
+        <button class="btn" id="go" type="submit">write a reply</button>
+      </form>
+      <section id="manual" class="card" hidden>
+        <p>couldn't load that post. paste the text instead.</p>
+        <label>post text
+          <textarea id="manualText" maxlength="2000" placeholder="paste the post text here"></textarea>
+        </label>
+      </section>
+      <section id="preview" class="card" hidden>
+        <p class="meta" id="previewMeta"></p>
+        <p class="text" id="previewText"></p>
+        <p class="quoted" id="previewQuote" hidden></p>
+      </section>
+      <section id="result" class="card" hidden>
+        <p class="reply" id="reply"></p>
+        <p class="note" id="modelNote" hidden></p>
+        <div class="actions">
+          <button class="btn btn-secondary" id="copy" type="button">copy</button>
+          <a class="btn-link btn" id="tweet" target="_blank" rel="noopener">reply on X</a>
+          <button class="btn btn-ghost" id="regen" type="button">regenerate</button>
+        </div>
+      </section>
+      <p class="error" id="error" hidden></p>
+      <p class="install">On Android in Brave or Chrome: open this site, tap the menu, then Install app. After that you can Share an X post to Francis Replies and the link will fill itself in.</p>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
