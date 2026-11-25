@@ -1,4 +1,4 @@
-const CACHE = "francis-replies-v4";
+const CACHE = "francis-replies-v5";
 const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {

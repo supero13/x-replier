@@ -19,9 +19,12 @@ const json = (body: unknown, status = 200) =>
 function parseXUrl(raw: string): { id: string; handle: string; url: string } | null {
   const trimmed = raw.trim();
   if (!trimmed || trimmed.length > URL_MAX) return null;
+  const found = trimmed.match(/https?:\/\/(?:www\.|mobile\.)?(?:x\.com|twitter\.com)\/[^\s]+/i)
+    || trimmed.match(/(?:www\.|mobile\.)?(?:x\.com|twitter\.com)\/[^\s]+/i);
+  const candidate = found ? found[0] : trimmed;
   let u: URL;
   try {
-    u = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    u = new URL(candidate.includes("://") ? candidate : `https://${candidate}`);
   } catch {
     return null;
   }
@@ -61,6 +64,22 @@ function extractReplyTo(raw: any): { id: string; handle: string } | null {
   return null;
 }
 
+function mediaCaption(t: any): string {
+  const media = t?.media || {};
+  const items = [
+    ...(Array.isArray(media.photos) ? media.photos : []),
+    ...(Array.isArray(media.videos) ? media.videos : []),
+    ...(Array.isArray(media.all) ? media.all : []),
+    ...(Array.isArray(media) ? media : []),
+  ];
+  const alts = items.map((i) => i && (i.altText || i.alt || i.description)).filter(Boolean);
+  if (alts.length) return alts.join(" ");
+  const isVideo = Boolean(media.videos?.length || items.some((i) => i && (i.type === "video" || i.duration)));
+  if (isVideo) return "[video]";
+  if (items.length) return "[image]";
+  return "";
+}
+
 function asPost(raw: any, fallbackId: string, fallbackHandle: string): Post | null {
   const t = raw?.tweet || raw?.status || raw;
   if (!t || typeof t !== "object") return null;
@@ -68,8 +87,8 @@ function asPost(raw: any, fallbackId: string, fallbackHandle: string): Post | nu
   const handle =
     author.screen_name || author.username || t.user_screen_name || fallbackHandle || "";
   const name = author.name || t.user_name || handle;
-  const text = t.text || t.full_text || t.tweetText || "";
   const id = String(t.id || t.tweetID || fallbackId || "");
+  const text = t.text || t.full_text || t.tweetText || mediaCaption(t) || (id ? "[post]" : "");
   if (!text || !id) return null;
   const q = t.quote || t.quoted_tweet || t.quoted_status || t.qrt || null;
   let quoted: Quoted | null = null;
@@ -122,15 +141,15 @@ async function getJson(url: string, timeoutMs: number) {
   }
 }
 
-async function fetchPostRaw(parsed: { id: string; handle: string; url: string }): Promise<{ post: Post; replyTo: { id: string; handle: string } | null } | null> {
+async function fetchPostRaw(parsed: { id: string; handle: string; url: string }, timeoutMs = 3500): Promise<{ post: Post; replyTo: { id: string; handle: string } | null } | null> {
   const { id, handle, url } = parsed;
-  const fx2 = await getJson(`https://api.fxtwitter.com/2/status/${id}`, 8000);
+  const fx2 = await getJson(`https://api.fxtwitter.com/2/status/${id}`, timeoutMs);
   let post = asPost(fx2, id, handle);
   if (post) return { post, replyTo: extractReplyTo(fx2) };
-  const fx1 = await getJson(`https://api.fxtwitter.com/${handle}/status/${id}`, 8000);
+  const fx1 = await getJson(`https://api.fxtwitter.com/${handle}/status/${id}`, Math.min(2500, timeoutMs));
   post = asPost(fx1, id, handle);
   if (post) return { post, replyTo: extractReplyTo(fx1) };
-  const vx = await getJson(`https://api.vxtwitter.com/${handle}/status/${id}`, 8000);
+  const vx = await getJson(`https://api.vxtwitter.com/${handle}/status/${id}`, Math.min(2500, timeoutMs));
   if (vx && typeof vx === "object") {
     const text = vx.text || vx.full_text || "";
     if (text) {
@@ -161,7 +180,7 @@ async function fetchPostRaw(parsed: { id: string; handle: string; url: string })
   }
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const timer = setTimeout(() => ctrl.abort(), 2500);
     const r = await fetch(`https://publish.twitter.com/oembed?omit_script=true&url=${encodeURIComponent(url)}`, {
       signal: ctrl.signal,
       headers: { "user-agent": "FrancisReplies/1.0" },
@@ -192,14 +211,18 @@ async function fetchPost(parsed: { id: string; handle: string; url: string }, wi
   const { post, replyTo } = got;
   if (withParent && replyTo?.id && replyTo.id !== post.id) {
     post.isComment = true;
-    const parentGot = await fetchPostRaw({
-      id: replyTo.id,
-      handle: replyTo.handle || "i",
-      url: `https://x.com/${replyTo.handle || "i"}/status/${replyTo.id}`,
-    });
-    if (parentGot?.post) {
-      const p = parentGot.post;
-      post.parent = { id: p.id, handle: p.handle, name: p.name, text: p.text, url: p.url };
+    try {
+      const parentGot = await fetchPostRaw({
+        id: replyTo.id,
+        handle: replyTo.handle || "i",
+        url: `https://x.com/${replyTo.handle || "i"}/status/${replyTo.id}`,
+      }, 2500);
+      if (parentGot?.post) {
+        const p = parentGot.post;
+        post.parent = { id: p.id, handle: p.handle, name: p.name, text: p.text, url: p.url };
+      }
+    } catch {
+      // Parent is context only. Always still reply to the comment itself.
     }
   }
   return post;
@@ -269,7 +292,7 @@ function cleanReply(s: string) {
 
 async function groqChat(model: string, user: string) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
+  const timer = setTimeout(() => ctrl.abort(), 5000);
   try {
     const r = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
@@ -278,7 +301,7 @@ async function groqChat(model: string, user: string) {
       body: JSON.stringify({
         model,
         temperature: 0.9,
-        max_tokens: 100,
+        max_tokens: 256,
         reasoning_effort: "low",
         response_format: { type: "json_object" },
         messages: [
@@ -296,18 +319,68 @@ async function groqChat(model: string, user: string) {
   }
 }
 
+function extractJson(s: string): any {
+  if (!s || typeof s !== "string") return null;
+  const cleaned = s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  try { return JSON.parse(cleaned); } catch { /* continue */ }
+  const m = cleaned.match(/\{[\s\S]*\}/);
+  if (m) {
+    try { return JSON.parse(m[0]); } catch { /* continue */ }
+  }
+  const reply = cleaned.match(/"reply"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (reply) {
+    const tone = cleaned.match(/"tone"\s*:\s*"([^"]+)"/);
+    return { reply: reply[1], tone: tone ? tone[1] : "" };
+  }
+  return null;
+}
+
 function parseModelReply(raw: string): { reply: string; tone: string } {
   try {
     const d = JSON.parse(raw);
-    const content = d?.choices?.[0]?.message?.content || "";
-    const o = typeof content === "string" ? JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) : content;
-    return {
-      reply: cleanReply(typeof o?.reply === "string" ? o.reply : ""),
-      tone: normalizePostTone(typeof o?.tone === "string" ? o.tone : ""),
-    };
+    const msg = d?.choices?.[0]?.message || {};
+    const chunks: string[] = [];
+    if (typeof msg.content === "string") chunks.push(msg.content);
+    else if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (typeof part === "string") chunks.push(part);
+        else if (part && typeof part.text === "string") chunks.push(part.text);
+      }
+    }
+    if (typeof msg.reasoning === "string") chunks.push(msg.reasoning);
+    chunks.push(raw);
+    for (const chunk of chunks) {
+      const o = extractJson(chunk);
+      const reply = cleanReply(typeof o?.reply === "string" ? o.reply : "");
+      if (reply) {
+        return { reply, tone: normalizePostTone(typeof o?.tone === "string" ? o.tone : "") };
+      }
+    }
+    return { reply: "", tone: "" };
   } catch {
     return { reply: "", tone: "" };
   }
+}
+
+async function writeWithFallback(user: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
+  const attempts: { model: string; fallback: boolean }[] = [
+    { model: PRIMARY, fallback: false },
+    { model: FALLBACK, fallback: true },
+  ];
+  let saw429 = 0;
+  for (const attempt of attempts) {
+    const result = await groqChat(attempt.model, user);
+    if (result.status === 429) {
+      saw429 += 1;
+      continue;
+    }
+    if (result.status !== 200) continue;
+    const parsed = parseModelReply(result.raw);
+    if (parsed.reply) {
+      return { ...parsed, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
+    }
+  }
+  return { reply: "", tone: "", model: PRIMARY, usedFallback: true, bothRateLimited: saw429 === attempts.length };
 }
 
 export default async (req: Request) => {
@@ -365,10 +438,14 @@ export default async (req: Request) => {
   }
 
   let user = "";
-  if (post.parent) {
-    const parentWho = post.parent.handle ? `@${post.parent.handle}` : "the original poster";
-    const commentWho = post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "a commenter";
-    user = `This is a COMMENT on another post. Reply to the commenter, not the original post.\nParent post by ${parentWho}: ${JSON.stringify(post.parent.text)}\nComment by ${commentWho}: ${JSON.stringify(post.text)}`;
+  const commentWho = post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "a commenter";
+  if (post.parent || post.isComment) {
+    user = `This is a COMMENT on another post. Reply to the commenter, not the original post.`;
+    if (post.parent) {
+      const parentWho = post.parent.handle ? `@${post.parent.handle}` : "the original poster";
+      user += `\nParent post by ${parentWho}: ${JSON.stringify(post.parent.text)}`;
+    }
+    user += `\nComment by ${commentWho}: ${JSON.stringify(post.text)}`;
   } else {
     user = `Author: ${post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "unknown"}\nPost: ${JSON.stringify(post.text)}`;
   }
@@ -376,33 +453,20 @@ export default async (req: Request) => {
   user += `\n${toneHint(tone)}`;
   if (previous) user += `\nDo not repeat this reply: ${JSON.stringify(previous)}`;
 
-  const first = await groqChat(PRIMARY, user);
-  let model = PRIMARY;
-  let usedFallback = false;
-  let result = first;
-  if (first.status === 429) {
-    const second = await groqChat(FALLBACK, user);
-    model = FALLBACK;
-    usedFallback = true;
-    result = second;
-    if (second.status === 429) {
-      return json({
-        error: "Groq's free limit is used up for now. Try again in a bit.",
-        rateLimited: true,
-        post,
-      }, 429);
-    }
+  const out = await writeWithFallback(user);
+  if (!out.reply && out.bothRateLimited) {
+    return json({
+      error: "Groq's free limit is used up for now. Try again in a bit.",
+      rateLimited: true,
+      post,
+    }, 429);
   }
-  if (result.status !== 200) {
-    return json({ error: "Couldn't write a reply just now. Try again." }, 502);
-  }
-  const parsedReply = parseModelReply(result.raw);
-  if (!parsedReply.reply) return json({ error: "Couldn't write a reply just now. Try again." }, 502);
+  if (!out.reply) return json({ error: "Couldn't write a reply just now. Try again.", post }, 502);
   return json({
     post,
-    reply: parsedReply.reply,
-    detectedTone: parsedReply.tone,
-    model,
-    usedFallback,
+    reply: out.reply,
+    detectedTone: out.tone,
+    model: out.model,
+    usedFallback: out.usedFallback,
   });
 };

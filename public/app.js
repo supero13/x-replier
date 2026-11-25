@@ -117,7 +117,9 @@ async function generate(isRegen) {
   inflight = true;
   const seq = ++reqSeq;
   showError("");
-  const url = urlInput ? urlInput.value.trim() : "";
+  const rawUrl = urlInput ? urlInput.value.trim() : "";
+  const extracted = extractXUrl(rawUrl);
+  const url = extracted || rawUrl;
   const text = manualText ? manualText.value.trim() : "";
   if (!url && !text) {
     showError("Paste an X post link first.");
