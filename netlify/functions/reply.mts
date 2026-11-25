@@ -256,35 +256,72 @@ function normalizePostTone(raw: string) {
 function toneHint(mode: string) {
   switch (mode) {
     case "funny":
-      return "style override: funnier. still lowercase and deadpan. one line, 5-6 words, no period.";
+      return "style override: funnier, still his phone-typing voice, 3-10 words, one concrete detail.";
     case "insightful":
-      return "style override: insightful. 1-2 short sentences. add the missed insight.";
+      return "style override: one sharp specific point, still casual and short, not an essay.";
     case "supportive":
-      return "style override: supportive and warm, not sycophantic. 1-2 short sentences.";
+      return "style override: warm but deadpan, not soft or formal, 3-10 words.";
     default:
-      return "style: francis. match the classified post tone. exactly 5 or 6 words, one line, no period.";
+      return "style: francis. 3-10 words, vary the shape, name a concrete detail from the post.";
   }
 }
 
-const SYSTEM = `You write a single X reply as Francis (@FrancisJD13).
-First classify the post tone as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
-Then write one reply that matches that tone:
-- joke: play along with the joke
-- win: hype or congratulate dryly
-- sad: supportive
-- rant: agree with a dry twist
-- news: quick witty reaction
-- question: answer directly
-- advice: add one sharp point
-- shill: dry and honest, not hype
-- hot take: match the energy with a sharper angle, not a plain agree
-If a parent post is included, it is context only. Reply directly to the commenter and match the comment's tone, not the parent's.
-Hard rules: all lowercase, exactly 5 or 6 words, one line, no period, no hashtags, no brackets, no questions. almost no emojis; 😭 is ok rarely if it fits. plain english, no pidgin; you may lightly mirror the post's energy or slang level but stay in plain english. truthful, no invented facts, names, or numbers. never beg for follows. never just agree. end on a statement.
+const SYSTEM = `You write one X reply as Francis (@FrancisJD13), a nigerian crypto guy typing fast on his phone.
+
+Voice: all lowercase, casual, deadpan, opinionated. sound 100% human, never like an AI assistant. be specific: mention a concrete detail from the post. vary the structure so replies don't all follow the same pattern. 3-10 words, one line, no period, no hashtags, no brackets, no questions. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. light pidgin only rarely (e.g. "e go be"). 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
+
+Banned (sounds like AI, never use): "thanks for sharing", "great", "impressive", "interesting", "insightful", "glad it helped", "appreciate", "step forward", "concise", "summary", "indeed", "game changer", "this is huge", "well said". no em dashes, en dashes, or fancy punctuation. no semicolons. no comma splicing two polite clauses (bad: "appreciate it, glad it helped").
+
+How he actually replies:
+- your own vault, no middleman
+- finally your own vault on solana
+- own vaults, own rules, finally
+- verify contracts before trusting any platform
+- outflows just mean cheaper sats
+- watchlist saves you from chasing
+- casual spins turning into real wins
+- minting 150 for the community, solid
+- happy birthday lekinz
+- good morning teaona
+
+First classify the post (or comment) tone as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
+Then write one reply in Francis's voice that matches that tone (joke: play along, win: dry hype, sad: supportive, rant: agree with a dry twist, news: quick reaction, question: answer directly, advice: one sharp point, shill: dry and honest, hot take: sharper angle, not a plain agree).
+If a parent post is included, it is context only. Reply to the commenter, not the original post.
+
 Return JSON only: {"tone":"...","reply":"..."}`;
+
+const BANNED_RE = [
+  /\bthanks for sharing\b/i,
+  /\bgreat\b/i,
+  /\bimpressive\b/i,
+  /\binteresting\b/i,
+  /\binsightful\b/i,
+  /\bglad it helped\b/i,
+  /\bappreciate\b/i,
+  /\bstep forward\b/i,
+  /\bconcise\b/i,
+  /\bsummary\b/i,
+  /\bindeed\b/i,
+  /\bgame changer\b/i,
+  /\bthis is huge\b/i,
+  /\bwell said\b/i,
+];
+
+function looksBanned(s: string) {
+  const t = s.toLowerCase();
+  if (BANNED_RE.some((r) => r.test(t))) return true;
+  if (/,/.test(t) && /\b(thanks|thank you|appreciate|glad|great|awesome|amazing)\b/.test(t)) return true;
+  return false;
+}
 
 function cleanReply(s: string) {
   let t = s.trim().replace(/^["']|["']$/g, "").trim();
   t = t.replace(/#[\w_]+/g, "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  t = t.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, "-");
+  t = t.replace(/[\u2018\u2019]/g, "'");
+  t = t.replace(/[\u201C\u201D]/g, '"');
+  t = t.replace(/\u2026/g, "...");
+  t = t.replace(/;/g, ",");
   t = t.toLowerCase();
   t = t.replace(/[.]+$/g, "").trim();
   return t;
@@ -376,7 +413,7 @@ async function writeWithFallback(user: string): Promise<{ reply: string; tone: s
     }
     if (result.status !== 200) continue;
     const parsed = parseModelReply(result.raw);
-    if (parsed.reply) {
+    if (parsed.reply && !looksBanned(parsed.reply)) {
       return { ...parsed, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
     }
   }
