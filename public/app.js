@@ -3,6 +3,10 @@ const urlInput = document.getElementById("url");
 const go = document.getElementById("go");
 const manual = document.getElementById("manual");
 const manualText = document.getElementById("manualText");
+const parentText = document.getElementById("parentText");
+const manualLead = document.getElementById("manualLead");
+const commentFlag = document.getElementById("commentFlag");
+const parentSnip = document.getElementById("parentSnip");
 const preview = document.getElementById("preview");
 const previewMeta = document.getElementById("previewMeta");
 const previewText = document.getElementById("previewText");
@@ -38,6 +42,17 @@ function showPost(post) {
     return;
   }
   preview.hidden = false;
+  const isComment = Boolean(post.isComment || post.parent);
+  commentFlag.hidden = !isComment;
+  if (post.parent && post.parent.text) {
+    parentSnip.hidden = false;
+    const pWho = post.parent.handle ? `@${post.parent.handle}` : "original post";
+    const snip = String(post.parent.text).replace(/\s+/g, " ").trim();
+    parentSnip.textContent = `${pWho}: ${snip.length > 180 ? snip.slice(0, 177) + "…" : snip}`;
+  } else {
+    parentSnip.hidden = true;
+    parentSnip.textContent = "";
+  }
   const who = post.name && post.handle ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "pasted post";
   previewMeta.textContent = who;
   previewText.textContent = post.text || "";
@@ -47,6 +62,10 @@ function showPost(post) {
   } else {
     previewQuote.hidden = true;
     previewQuote.textContent = "";
+  }
+  if (isComment && !post.parent?.text) {
+    manual.hidden = false;
+    if (manualLead) manualLead.textContent = "this is a comment. paste the original post too, if you have it.";
   }
 }
 
@@ -94,6 +113,7 @@ async function generate(isRegen) {
       body: JSON.stringify({
         url,
         text: text || undefined,
+        parentText: (parentText && parentText.value.trim()) || undefined,
         tone,
         previous: isRegen ? lastReply : undefined,
       }),

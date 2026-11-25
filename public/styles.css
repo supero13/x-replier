@@ -112,3 +112,23 @@ textarea { min-height: 7rem; resize: vertical; }
 .error { color: #ff8fab; margin: 14px 0; }
 #manual p { margin: 0 0 8px; }
 .install { color: var(--muted); font-size: 0.9rem; margin: 28px 0 0; }
+
+.comment-flag {
+  color: var(--yellow);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  margin: 0 0 10px;
+}
+.parent-snip {
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #3a3946;
+  color: var(--muted);
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+.optional { margin-top: 12px; }
+.optional span { color: var(--muted); font-weight: 400; }

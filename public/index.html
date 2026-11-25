@@ -33,12 +33,17 @@
         <button class="btn" id="go" type="submit">write a reply</button>
       </form>
       <section id="manual" class="card" hidden>
-        <p>couldn't load that post. paste the text instead.</p>
-        <label>post text
-          <textarea id="manualText" maxlength="2000" placeholder="paste the post text here"></textarea>
+        <p id="manualLead">couldn't load that post. paste the text instead.</p>
+        <label>post or comment text
+          <textarea id="manualText" maxlength="2000" placeholder="paste the post or comment text here"></textarea>
+        </label>
+        <label class="optional">original post <span>(optional)</span>
+          <textarea id="parentText" maxlength="2000" placeholder="if this is a comment, paste the original post too"></textarea>
         </label>
       </section>
       <section id="preview" class="card" hidden>
+        <p class="comment-flag" id="commentFlag" hidden>replying to a comment</p>
+        <p class="parent-snip" id="parentSnip" hidden></p>
         <p class="meta" id="previewMeta"></p>
         <p class="text" id="previewText"></p>
         <p class="quoted" id="previewQuote" hidden></p>

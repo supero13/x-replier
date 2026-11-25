@@ -35,7 +35,31 @@ function parseXUrl(raw: string): { id: string; handle: string; url: string } | n
 }
 
 type Quoted = { handle: string; name: string; text: string };
-type Post = { id: string; handle: string; name: string; text: string; url: string; quoted: Quoted | null };
+type Parent = { id: string; handle: string; name: string; text: string; url: string };
+type Post = {
+  id: string;
+  handle: string;
+  name: string;
+  text: string;
+  url: string;
+  quoted: Quoted | null;
+  parent: Parent | null;
+  isComment: boolean;
+};
+
+function extractReplyTo(raw: any): { id: string; handle: string } | null {
+  const t = raw?.tweet || raw?.status || raw || {};
+  const r = t.replying_to ?? t.replyingTo ?? raw?.replying_to ?? raw?.replyingTo;
+  if (r && typeof r === "object") {
+    const id = String(r.status || r.id || r.status_id || r.tweet_id || "");
+    const handle = String(r.screen_name || r.username || r.user_screen_name || "").replace(/^@/, "");
+    if (/^\d{2,20}$/.test(id)) return { id, handle };
+  }
+  const id = String(t.replying_to_status || t.replying_to_status_id || t.in_reply_to_status_id || raw?.replying_to_status || "");
+  const handle = String((typeof r === "string" ? r : "") || t.in_reply_to_screen_name || t.replying_to || "").replace(/^@/, "");
+  if (/^\d{2,20}$/.test(id)) return { id, handle };
+  return null;
+}
 
 function asPost(raw: any, fallbackId: string, fallbackHandle: string): Post | null {
   const t = raw?.tweet || raw?.status || raw;
@@ -55,6 +79,7 @@ function asPost(raw: any, fallbackId: string, fallbackHandle: string): Post | nu
     const qh = qa.screen_name || qa.username || q.user_screen_name || "";
     if (qt) quoted = { handle: qh, name: qa.name || qh, text: String(qt) };
   }
+  const replyTo = extractReplyTo(raw);
   return {
     id,
     handle: String(handle).replace(/^@/, ""),
@@ -62,6 +87,8 @@ function asPost(raw: any, fallbackId: string, fallbackHandle: string): Post | nu
     text: String(text),
     url: `https://x.com/${String(handle).replace(/^@/, "") || "i"}/status/${id}`,
     quoted,
+    parent: null,
+    isComment: Boolean(replyTo?.id),
   };
 }
 
@@ -95,14 +122,14 @@ async function getJson(url: string, timeoutMs: number) {
   }
 }
 
-async function fetchPost(parsed: { id: string; handle: string; url: string }): Promise<Post | null> {
+async function fetchPostRaw(parsed: { id: string; handle: string; url: string }): Promise<{ post: Post; replyTo: { id: string; handle: string } | null } | null> {
   const { id, handle, url } = parsed;
   const fx2 = await getJson(`https://api.fxtwitter.com/2/status/${id}`, 8000);
   let post = asPost(fx2, id, handle);
-  if (post) return post;
+  if (post) return { post, replyTo: extractReplyTo(fx2) };
   const fx1 = await getJson(`https://api.fxtwitter.com/${handle}/status/${id}`, 8000);
   post = asPost(fx1, id, handle);
-  if (post) return post;
+  if (post) return { post, replyTo: extractReplyTo(fx1) };
   const vx = await getJson(`https://api.vxtwitter.com/${handle}/status/${id}`, 8000);
   if (vx && typeof vx === "object") {
     const text = vx.text || vx.full_text || "";
@@ -116,13 +143,19 @@ async function fetchPost(parsed: { id: string; handle: string; url: string }): P
           text: q.text || q.full_text,
         };
       }
+      const replyTo = extractReplyTo(vx);
       return {
-        id: String(vx.tweetID || vx.id || id),
-        handle: String(vx.user_screen_name || handle).replace(/^@/, ""),
-        name: String(vx.user_name || vx.user_screen_name || handle),
-        text: String(text),
-        url,
-        quoted,
+        post: {
+          id: String(vx.tweetID || vx.id || id),
+          handle: String(vx.user_screen_name || handle).replace(/^@/, ""),
+          name: String(vx.user_name || vx.user_screen_name || handle),
+          text: String(text),
+          url,
+          quoted,
+          parent: null,
+          isComment: Boolean(replyTo?.id),
+        },
+        replyTo,
       };
     }
   }
@@ -141,13 +174,35 @@ async function fetchPost(parsed: { id: string; handle: string; url: string }): P
         const authorUrl = String(o.author_url || "");
         const hm = authorUrl.match(/((?:x|twitter)\.com)\/([^/?#]+)/i);
         const h = hm?.[2] || handle;
-        return { id, handle: h, name: String(o.author_name || h), text, url, quoted: null };
+        return {
+          post: { id, handle: h, name: String(o.author_name || h), text, url, quoted: null, parent: null, isComment: false },
+          replyTo: null,
+        };
       }
     }
   } catch {
     /* fall through */
   }
   return null;
+}
+
+async function fetchPost(parsed: { id: string; handle: string; url: string }, withParent = true): Promise<Post | null> {
+  const got = await fetchPostRaw(parsed);
+  if (!got) return null;
+  const { post, replyTo } = got;
+  if (withParent && replyTo?.id && replyTo.id !== post.id) {
+    post.isComment = true;
+    const parentGot = await fetchPostRaw({
+      id: replyTo.id,
+      handle: replyTo.handle || "i",
+      url: `https://x.com/${replyTo.handle || "i"}/status/${replyTo.id}`,
+    });
+    if (parentGot?.post) {
+      const p = parentGot.post;
+      post.parent = { id: p.id, handle: p.handle, name: p.name, text: p.text, url: p.url };
+    }
+  }
+  return post;
 }
 
 const POST_TONES: Record<string, string> = {
@@ -200,6 +255,7 @@ Then write one reply that matches that tone:
 - advice: add one sharp point
 - shill: dry and honest, not hype
 - hot take: match the energy with a sharper angle, not a plain agree
+If a parent post is included, it is context only. Reply directly to the commenter and match the comment's tone, not the parent's.
 Hard rules: all lowercase, exactly 5 or 6 words, one line, no period, no hashtags, no brackets, no questions. almost no emojis; 😭 is ok rarely if it fits. plain english, no pidgin; you may lightly mirror the post's energy or slang level but stay in plain english. truthful, no invented facts, names, or numbers. never beg for follows. never just agree. end on a statement.
 Return JSON only: {"tone":"...","reply":"..."}`;
 
@@ -269,8 +325,10 @@ export default async (req: Request) => {
   const previous = typeof body.previous === "string" ? body.previous.slice(0, 280) : "";
   const urlIn = typeof body.url === "string" ? body.url.trim() : "";
   const textIn = typeof body.text === "string" ? body.text.trim() : "";
+  const parentText = typeof body.parentText === "string" ? body.parentText.trim() : "";
   if (urlIn && urlIn.length > URL_MAX) return json({ error: "That link is too long." }, 400);
   if (textIn && textIn.length > TEXT_MAX) return json({ error: "That text is too long. Keep it under 2000 characters." }, 400);
+  if (parentText && parentText.length > TEXT_MAX) return json({ error: "That original post text is too long. Keep it under 2000 characters." }, 400);
 
   let post: Post | null = null;
   if (urlIn) {
@@ -290,16 +348,30 @@ export default async (req: Request) => {
         text: textIn,
         url: parsed.url,
         quoted: null,
+        parent: null,
+        isComment: false,
       };
     }
   } else if (textIn) {
-    post = { id: "", handle: "", name: "", text: textIn, url: "", quoted: null };
+    post = { id: "", handle: "", name: "", text: textIn, url: "", quoted: null, parent: null, isComment: false };
   } else {
     return json({ error: "Paste an X post link first." }, 400);
   }
   if (!post) return json({ error: "Couldn't load that post. Paste the text instead.", needsManual: true }, 422);
 
-  let user = `Author: ${post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "unknown"}\nPost: ${JSON.stringify(post.text)}`;
+  if (parentText && !post.parent) {
+    post.isComment = true;
+    post.parent = { id: "", handle: "", name: "", text: parentText, url: "" };
+  }
+
+  let user = "";
+  if (post.parent) {
+    const parentWho = post.parent.handle ? `@${post.parent.handle}` : "the original poster";
+    const commentWho = post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "a commenter";
+    user = `This is a COMMENT on another post. Reply to the commenter, not the original post.\nParent post by ${parentWho}: ${JSON.stringify(post.parent.text)}\nComment by ${commentWho}: ${JSON.stringify(post.text)}`;
+  } else {
+    user = `Author: ${post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "unknown"}\nPost: ${JSON.stringify(post.text)}`;
+  }
   if (post.quoted) user += `\nQuoted post by @${post.quoted.handle}: ${JSON.stringify(post.quoted.text)}`;
   user += `\n${toneHint(tone)}`;
   if (previous) user += `\nDo not repeat this reply: ${JSON.stringify(previous)}`;
