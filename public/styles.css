@@ -110,6 +110,7 @@ textarea { min-height: 7rem; resize: vertical; }
 }
 .note { color: var(--yellow); font-size: 0.85rem; margin: 10px 0 0; }
 .error { color: #ff8fab; margin: 14px 0; }
+.error[hidden] { display: none !important; }
 #manual p { margin: 0 0 8px; }
 .install { color: var(--muted); font-size: 0.9rem; margin: 28px 0 0; }
 

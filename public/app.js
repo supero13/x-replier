@@ -23,6 +23,8 @@ const errorEl = document.getElementById("error");
 let tone = "francis";
 let lastReply = "";
 let lastPostId = "";
+let inflight = false;
+let reqSeq = 0;
 
 document.querySelectorAll(".tones button").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -32,38 +34,47 @@ document.querySelectorAll(".tones button").forEach((btn) => {
 });
 
 function showError(msg) {
-  errorEl.hidden = !msg;
-  errorEl.textContent = msg || "";
+  if (!errorEl) return;
+  const text = msg || "";
+  errorEl.textContent = text;
+  if (text) errorEl.removeAttribute("hidden");
+  else errorEl.setAttribute("hidden", "");
+  errorEl.hidden = !text;
 }
 
 function showPost(post) {
+  if (!preview) return;
   if (!post) {
     preview.hidden = true;
     return;
   }
   preview.hidden = false;
   const isComment = Boolean(post.isComment || post.parent);
-  commentFlag.hidden = !isComment;
+  if (commentFlag) commentFlag.hidden = !isComment;
   if (post.parent && post.parent.text) {
-    parentSnip.hidden = false;
-    const pWho = post.parent.handle ? `@${post.parent.handle}` : "original post";
-    const snip = String(post.parent.text).replace(/\s+/g, " ").trim();
-    parentSnip.textContent = `${pWho}: ${snip.length > 180 ? snip.slice(0, 177) + "…" : snip}`;
-  } else {
+    if (parentSnip) {
+      parentSnip.hidden = false;
+      const pWho = post.parent.handle ? `@${post.parent.handle}` : "original post";
+      const snip = String(post.parent.text).replace(/\s+/g, " ").trim();
+      parentSnip.textContent = `${pWho}: ${snip.length > 180 ? snip.slice(0, 177) + "…" : snip}`;
+    }
+  } else if (parentSnip) {
     parentSnip.hidden = true;
     parentSnip.textContent = "";
   }
   const who = post.name && post.handle ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "pasted post";
-  previewMeta.textContent = who;
-  previewText.textContent = post.text || "";
+  if (previewMeta) previewMeta.textContent = who;
+  if (previewText) previewText.textContent = post.text || "";
   if (post.quoted && post.quoted.text) {
-    previewQuote.hidden = false;
-    previewQuote.textContent = `quoting @${post.quoted.handle}: ${post.quoted.text}`;
-  } else {
+    if (previewQuote) {
+      previewQuote.hidden = false;
+      previewQuote.textContent = `quoting @${post.quoted.handle}: ${post.quoted.text}`;
+    }
+  } else if (previewQuote) {
     previewQuote.hidden = true;
     previewQuote.textContent = "";
   }
-  if (isComment && !post.parent?.text) {
+  if (isComment && !(post.parent && post.parent.text) && manual) {
     manual.hidden = false;
     if (manualLead) manualLead.textContent = "this is a comment. paste the original post too, if you have it.";
   }
@@ -72,40 +83,52 @@ function showPost(post) {
 function showReply(reply, post, usedFallback, model, detectedTone) {
   lastReply = reply;
   lastPostId = post && post.id ? post.id : lastPostId;
-  result.hidden = false;
-  replyEl.textContent = reply;
-  if (detectedTone) {
-    toneChip.hidden = false;
-    toneChip.textContent = detectedTone;
-  } else {
-    toneChip.hidden = true;
-    toneChip.textContent = "";
+  if (result) result.hidden = false;
+  if (replyEl) replyEl.textContent = reply;
+  if (toneChip) {
+    if (detectedTone) {
+      toneChip.hidden = false;
+      toneChip.textContent = detectedTone;
+    } else {
+      toneChip.hidden = true;
+      toneChip.textContent = "";
+    }
   }
-  if (usedFallback) {
-    modelNote.hidden = false;
-    modelNote.textContent = "used the lighter model this time (gpt-oss-20b)";
-  } else {
-    modelNote.hidden = true;
-    modelNote.textContent = "";
+  if (modelNote) {
+    if (usedFallback) {
+      modelNote.hidden = false;
+      modelNote.textContent = "used the lighter model this time (gpt-oss-20b)";
+    } else {
+      modelNote.hidden = true;
+      modelNote.textContent = "";
+    }
   }
   const id = (post && post.id) || lastPostId;
-  const intent = new URL("https://x.com/intent/post");
-  intent.searchParams.set("text", reply);
-  if (id) intent.searchParams.set("in_reply_to", id);
-  tweetBtn.href = intent.toString();
+  if (tweetBtn) {
+    const intent = new URL("https://x.com/intent/post");
+    intent.searchParams.set("text", reply);
+    if (id) intent.searchParams.set("in_reply_to", id);
+    tweetBtn.href = intent.toString();
+  }
 }
 
 async function generate(isRegen) {
+  if (inflight) return;
+  inflight = true;
+  const seq = ++reqSeq;
   showError("");
-  const url = urlInput.value.trim();
-  const text = manualText.value.trim();
+  const url = urlInput ? urlInput.value.trim() : "";
+  const text = manualText ? manualText.value.trim() : "";
   if (!url && !text) {
     showError("Paste an X post link first.");
+    inflight = false;
     return;
   }
-  go.disabled = true;
-  regenBtn.disabled = true;
-  go.textContent = isRegen ? "writing another…" : "writing…";
+  if (go) {
+    go.disabled = true;
+    go.textContent = isRegen ? "writing another…" : "writing…";
+  }
+  if (regenBtn) regenBtn.disabled = true;
   try {
     const r = await fetch("/api/reply", {
       method: "POST",
@@ -119,38 +142,50 @@ async function generate(isRegen) {
       }),
     });
     const data = await r.json().catch(() => ({}));
+    if (seq !== reqSeq) return;
     if (data.post) showPost(data.post);
-    if (data.needsManual) manual.hidden = false;
-    if (!r.ok) {
-      showError(data.error || "Couldn't write a reply just now. Try again.");
+    if (data.needsManual && manual) manual.hidden = false;
+    // A reply means success: always clear the error, even if a raced
+    // request later failed or the status code looks wrong.
+    if (data.reply) {
+      showReply(data.reply, data.post, data.usedFallback, data.model, data.detectedTone);
+      showError("");
       return;
     }
-    showReply(data.reply, data.post, data.usedFallback, data.model, data.detectedTone);
+    showError(data.error || "Couldn't write a reply just now. Try again.");
   } catch {
+    if (seq !== reqSeq) return;
     showError("Network error. Check your connection and try again.");
   } finally {
-    go.disabled = false;
-    regenBtn.disabled = false;
-    go.textContent = "write a reply";
+    if (seq === reqSeq) inflight = false;
+    if (go) {
+      go.disabled = false;
+      go.textContent = "write a reply";
+    }
+    if (regenBtn) regenBtn.disabled = false;
   }
 }
 
-form.addEventListener("submit", (e) => {
-  e.preventDefault();
-  generate(false);
-});
-regenBtn.addEventListener("click", () => generate(true));
-copyBtn.addEventListener("click", async () => {
-  const text = replyEl.textContent || "";
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-    copyBtn.textContent = "copied";
-    setTimeout(() => { copyBtn.textContent = "copy"; }, 1200);
-  } catch {
-    showError("Couldn't copy. Long-press the reply instead.");
-  }
-});
+if (form) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    generate(false);
+  });
+}
+if (regenBtn) regenBtn.addEventListener("click", () => generate(true));
+if (copyBtn) {
+  copyBtn.addEventListener("click", async () => {
+    const text = replyEl && replyEl.textContent ? replyEl.textContent : "";
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = "copied";
+      setTimeout(() => { copyBtn.textContent = "copy"; }, 1200);
+    } catch {
+      showError("Couldn't copy. Long-press the reply instead.");
+    }
+  });
+}
 
 function extractXUrl(s) {
   if (!s) return "";
@@ -159,6 +194,7 @@ function extractXUrl(s) {
 }
 
 function applyShareParams() {
+  if (!urlInput) return;
   const q = new URLSearchParams(location.search);
   const fromUrl = q.get("url") || "";
   const fromText = q.get("text") || "";
@@ -168,7 +204,7 @@ function applyShareParams() {
     urlInput.value = found;
     return;
   }
-  if (fromText && !fromText.startsWith("http")) {
+  if (fromText && !fromText.startsWith("http") && manual && manualText) {
     manual.hidden = false;
     manualText.value = fromText;
   }
@@ -177,7 +213,15 @@ function applyShareParams() {
 applyShareParams();
 
 if ("serviceWorker" in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      if (reg && reg.update) reg.update();
+    }).catch(() => {});
   });
 }

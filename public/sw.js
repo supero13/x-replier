@@ -1,4 +1,4 @@
-const CACHE = "francis-replies-v3";
+const CACHE = "francis-replies-v4";
 const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -17,10 +17,28 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/.netlify/")) return;
+
+  const path = url.pathname;
+  const isShell = path === "/" || path.endsWith(".html") || path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".webmanifest");
+  if (isShell) {
+    event.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req).then((hit) => hit || caches.match("/")))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(req, copy));
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+      }
       return res;
     }).catch(() => caches.match("/")))
   );
