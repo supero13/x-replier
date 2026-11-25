@@ -256,23 +256,30 @@ function normalizePostTone(raw: string) {
 function toneHint(mode: string) {
   switch (mode) {
     case "funny":
-      return "style override: funnier, still his phone-typing voice, 3-10 words, one concrete detail.";
+      return "style override: funnier, still his phone-typing voice, 3-10 words. stay on this post's exact topic.";
     case "insightful":
-      return "style override: one sharp specific point, still casual and short, not an essay.";
+      return "style override: one sharp point already in the post, still casual and short. no new topics.";
     case "supportive":
-      return "style override: warm but deadpan, not soft or formal, 3-10 words.";
+      return "style override: warm but deadpan, 3-10 words, respond to what they actually said.";
     default:
-      return "style: francis. 3-10 words, vary the shape, name a concrete detail from the post.";
+      return "style: francis. 3-10 words. respond to this post's main point only. do not add new topics.";
   }
 }
 
 const SYSTEM = `You write one X reply as Francis (@FrancisJD13), a nigerian crypto guy typing fast on his phone.
 
-Voice: all lowercase, casual, deadpan, opinionated. sound 100% human, never like an AI assistant. be specific: mention a concrete detail from the post. vary the structure so replies don't all follow the same pattern. 3-10 words, one line, no period, no hashtags, no brackets, no questions. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. light pidgin only rarely (e.g. "e go be"). 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
+Stay on topic (this is the most important rule):
+- Reply directly to the exact post text you are given. If this is a COMMENT, reply to the commenter's own words, not a recap of the parent post. The parent is background only.
+- If a comment is only @mentions or media, you may react to the parent. If the comment has its own message (thanks, a question, a joke, an opinion), answer that message.
+- Every reply must clearly relate to that text's main point.
+- Never introduce topics, coins, numbers, names, or details that are not already in the post (or parent, as background).
+- The style examples below are for STYLE only (short, casual, deadpan). Never reuse their topics or wording. Do not mention vaults, solana, watchlists, spins, birthdays, outflows, or anything from the examples unless the current post itself is about that.
 
-Banned (sounds like AI, never use): "thanks for sharing", "great", "impressive", "interesting", "insightful", "glad it helped", "appreciate", "step forward", "concise", "summary", "indeed", "game changer", "this is huge", "well said". no em dashes, en dashes, or fancy punctuation. no semicolons. no comma splicing two polite clauses (bad: "appreciate it, glad it helped").
+Voice: all lowercase, casual, deadpan, opinionated. 100% human, never like an AI assistant. 3-10 words, one line, no period, no hashtags, no brackets, no questions. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. light pidgin only rarely (e.g. "e go be"). 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
 
-How he actually replies:
+Banned (sounds like AI, never use): "thanks for sharing", "great", "impressive", "interesting", "insightful", "glad it helped", "appreciate", "step forward", "concise", "summary", "indeed", "game changer", "this is huge", "well said". no em dashes, en dashes, or fancy punctuation. no semicolons. no comma splicing two polite clauses.
+
+Style examples only (do not copy topics):
 - your own vault, no middleman
 - finally your own vault on solana
 - own vaults, own rules, finally
@@ -285,10 +292,10 @@ How he actually replies:
 - good morning teaona
 
 First classify the post (or comment) tone as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
-Then write one reply in Francis's voice that matches that tone (joke: play along, win: dry hype, sad: supportive, rant: agree with a dry twist, news: quick reaction, question: answer directly, advice: one sharp point, shill: dry and honest, hot take: sharper angle, not a plain agree).
-If a parent post is included, it is context only. Reply to the commenter, not the original post.
+Then write a 3-6 word topic summary of the text you are actually replying to (the comment, if this is a comment; otherwise the post).
+Then write one reply in Francis's voice that matches that tone and that topic.
 
-Return JSON only: {"tone":"...","reply":"..."}`;
+Return JSON only: {"tone":"...","topic":"...","reply":"..."}`;
 
 const BANNED_RE = [
   /\bthanks for sharing\b/i,
@@ -307,10 +314,41 @@ const BANNED_RE = [
   /\bwell said\b/i,
 ];
 
+const STYLE_LEAK = [
+  "vault", "vaults", "solana", "middleman", "middlemen", "watchlist", "sats",
+  "outflows", "minting", "lekinz", "teaona", "spins", "fbyt", "fbytio",
+];
+
 function looksBanned(s: string) {
   const t = s.toLowerCase();
   if (BANNED_RE.some((r) => r.test(t))) return true;
   if (/,/.test(t) && /\b(thanks|thank you|appreciate|glad|great|awesome|amazing)\b/.test(t)) return true;
+  return false;
+}
+
+function normalizeHay(s: string) {
+  return s.toLowerCase().replace(/[$,]/g, " ").replace(/\s+/g, " ");
+}
+
+function offTopic(reply: string, source: string) {
+  const hay = normalizeHay(source);
+  const compact = hay.replace(/ /g, "");
+  const r = reply.toLowerCase();
+  for (const m of r.matchAll(/@([a-z0-9_]+)/g)) {
+    if (!hay.includes(m[1]) && !hay.includes("@" + m[1])) return true;
+  }
+  for (const m of r.matchAll(/\$[a-z]{2,15}/g)) {
+    const t = m[0].slice(1);
+    if (!hay.includes(t) && !hay.includes(m[0])) return true;
+  }
+  for (const m of r.matchAll(/\$?\d[\d,]*(?:\.\d+)?(?:[kmb])?\b/g)) {
+    const n = m[0].replace(/[$,]/g, "").toLowerCase();
+    if (!hay.includes(n) && !compact.includes(n)) return true;
+  }
+  for (const w of STYLE_LEAK) {
+    const re = new RegExp(`\\b${w}\\b`, "i");
+    if (re.test(r) && !re.test(hay)) return true;
+  }
   return false;
 }
 
@@ -337,7 +375,7 @@ async function groqChat(model: string, user: string) {
       headers: { "content-type": "application/json", authorization: `Bearer ${KEY}` },
       body: JSON.stringify({
         model,
-        temperature: 0.9,
+        temperature: 0.7,
         max_tokens: 256,
         reasoning_effort: "low",
         response_format: { type: "json_object" },
@@ -399,7 +437,7 @@ function parseModelReply(raw: string): { reply: string; tone: string } {
   }
 }
 
-async function writeWithFallback(user: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
+async function writeWithFallback(user: string, sourceText: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
   const attempts: { model: string; fallback: boolean }[] = [
     { model: PRIMARY, fallback: false },
     { model: FALLBACK, fallback: true },
@@ -413,7 +451,7 @@ async function writeWithFallback(user: string): Promise<{ reply: string; tone: s
     }
     if (result.status !== 200) continue;
     const parsed = parseModelReply(result.raw);
-    if (parsed.reply && !looksBanned(parsed.reply)) {
+    if (parsed.reply && !looksBanned(parsed.reply) && !offTopic(parsed.reply, sourceText)) {
       return { ...parsed, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
     }
   }
@@ -477,20 +515,22 @@ export default async (req: Request) => {
   let user = "";
   const commentWho = post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "a commenter";
   if (post.parent || post.isComment) {
-    user = `This is a COMMENT on another post. Reply to the commenter, not the original post.`;
+    user = `This is a COMMENT. Reply to what the commenter actually said. Do not recap or pitch the parent post.`;
     if (post.parent) {
       const parentWho = post.parent.handle ? `@${post.parent.handle}` : "the original poster";
-      user += `\nParent post by ${parentWho}: ${JSON.stringify(post.parent.text)}`;
+      user += `\nParent post (background only, not the topic unless the comment has no message of its own) by ${parentWho}: ${JSON.stringify(post.parent.text)}`;
     }
-    user += `\nComment by ${commentWho}: ${JSON.stringify(post.text)}`;
+    user += `\nComment to reply to, by ${commentWho}: ${JSON.stringify(post.text)}`;
   } else {
-    user = `Author: ${post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "unknown"}\nPost: ${JSON.stringify(post.text)}`;
+    user = `Author: ${post.name ? `${post.name} (@${post.handle})` : post.handle ? `@${post.handle}` : "unknown"}\nPost to reply to: ${JSON.stringify(post.text)}`;
   }
   if (post.quoted) user += `\nQuoted post by @${post.quoted.handle}: ${JSON.stringify(post.quoted.text)}`;
   user += `\n${toneHint(tone)}`;
   if (previous) user += `\nDo not repeat this reply: ${JSON.stringify(previous)}`;
 
-  const out = await writeWithFallback(user);
+  const sourceText = [post.text, post.name, post.handle, post.quoted?.text, post.quoted?.handle, post.parent?.text, post.parent?.handle, post.parent?.name].filter(Boolean).join("\n");
+  const out = await writeWithFallback(user, sourceText);
+
   if (!out.reply && out.bothRateLimited) {
     return json({
       error: "Groq's free limit is used up for now. Try again in a bit.",
