@@ -131,5 +131,11 @@ textarea { min-height: 7rem; resize: vertical; }
   white-space: pre-wrap;
   line-height: 1.4;
 }
+.understood {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
 .optional { margin-top: 12px; }
 .optional span { color: var(--muted); font-weight: 400; }

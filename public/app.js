@@ -11,6 +11,7 @@ const preview = document.getElementById("preview");
 const previewMeta = document.getElementById("previewMeta");
 const previewText = document.getElementById("previewText");
 const previewQuote = document.getElementById("previewQuote");
+const understood = document.getElementById("understood");
 const result = document.getElementById("result");
 const replyEl = document.getElementById("reply");
 const toneChip = document.getElementById("toneChip");
@@ -80,11 +81,24 @@ function showPost(post) {
   }
 }
 
-function showReply(reply, post, usedFallback, model, detectedTone) {
+function showUnderstood(text) {
+  if (!understood) return;
+  const t = (text || "").trim();
+  if (t) {
+    understood.hidden = false;
+    understood.textContent = "what the post says: " + t;
+  } else {
+    understood.hidden = true;
+    understood.textContent = "";
+  }
+}
+
+function showReply(reply, post, usedFallback, model, detectedTone, understanding) {
   lastReply = reply;
   lastPostId = post && post.id ? post.id : lastPostId;
   if (result) result.hidden = false;
   if (replyEl) replyEl.textContent = reply;
+  showUnderstood(understanding);
   if (toneChip) {
     if (detectedTone) {
       toneChip.hidden = false;
@@ -117,6 +131,7 @@ async function generate(isRegen) {
   inflight = true;
   const seq = ++reqSeq;
   showError("");
+  showUnderstood("");
   const rawUrl = urlInput ? urlInput.value.trim() : "";
   const extracted = extractXUrl(rawUrl);
   const url = extracted || rawUrl;
@@ -150,7 +165,7 @@ async function generate(isRegen) {
     // A reply means success: always clear the error, even if a raced
     // request later failed or the status code looks wrong.
     if (data.reply) {
-      showReply(data.reply, data.post, data.usedFallback, data.model, data.detectedTone);
+      showReply(data.reply, data.post, data.usedFallback, data.model, data.detectedTone, data.understanding);
       showError("");
       return;
     }

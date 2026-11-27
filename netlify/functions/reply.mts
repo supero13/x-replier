@@ -265,13 +265,13 @@ function normalizePostTone(raw: string) {
 function toneHint(mode: string) {
   switch (mode) {
     case "supportive":
-      return "style: supportive. warm personal encouragement to the poster, 3-8 words, one simple thought. plain everyday words a 10-year-old knows, like a friend talking. cheer them, do not restate the post. no fancy words, no pidgin, no naija, no sarcasm.";
+      return "style: supportive. warm adult encouragement that only fits this post, 4-12 plain words. cheer the poster about what they actually said. no pidgin, no naija, no sarcasm, no baby talk.";
     case "insights":
-      return "style: insights. one simple plain-language takeaway a kid would understand, still grounded only in that post, no new facts or numbers. 3-8 words, one simple thought. no fancy words, no pidgin, no naija.";
+      return "style: insights. a short mature takeaway from having actually read the post, still grounded only in that post, no new facts or numbers. 4-12 plain words. no pidgin, no naija.";
     case "naija funny":
-      return "style: naija funny. light nigerian pidgin humor, positive and on-topic, never mocking. 3-8 words, simple and easy to get, like a friend talking. a funny angle, not a recap.";
+      return "style: naija funny. mature nigerian pidgin humor, positive and on-topic, never mocking or childish. 4-12 words. a funny angle that only fits this post, not a recap.";
     default:
-      return "style: francis. dry deadpan witty positive one-liner, 3-8 words, one simple thought. plain everyday words a 10-year-old knows, like a friend talking. no fancy words, no pidgin, no naija, no sarcasm, no doom.";
+      return "style: francis. dry deadpan, mature, thoughtful, like a calm grown man on crypto/X. 4-12 plain words that answer what this post actually says. no pidgin, no naija, no sarcasm, no doom, no baby talk.";
   }
 }
 
@@ -286,17 +286,21 @@ Stay on topic:
 - Never introduce topics, coins, numbers, names, or details that are not already in the post (or parent, as background).
 - The style examples below are for STYLE only. Never reuse their topics or wording unless the current post is about that.
 
-Voice: all lowercase, casual, human, 3-8 words, one line, one simple thought, no period, no hashtags, no brackets, no questions. Write like a friend talking, in plain everyday words a 10-year-old knows. No abstract or fancy words (bad: curiosity, insight, resilient, signals, majority, horizons, fuels, thrust, victories, shifts, expands, progress). abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
+Voice: all lowercase, casual, human, 4-12 words, one line, no period, no hashtags, no brackets, no questions. Write like a calm grown man: mature, thoughtful, plain everyday words, no jargon, no baby talk. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
 
-Do not copy the post. You may reuse one simple common word if you need it. Do not reuse more than that, and do not parrot the post.
+Always read the post before you reply. The reply must directly answer your understanding of what the post says and what the poster wants. If the post asks a question, answer it.
 
-Add something new in a simple way: a clear thought, a kind word, or light humor in the requested style, still on-topic and positive. Never invent facts or numbers.
+Do not copy the post. You may reuse up to two simple words from it. Do not parrot it.
+
+The reply must be specific to this post. If the same line would still make sense under a totally different post, it is too generic — rewrite so it only fits this subject.
+
+No childish words or baby phrasing (bad: cool, super, wow, yay, awesome, good luck, keep shining, everyday).
 
 Never use these stock lines: keep grinding, keep tracking, keep pushing, you got this, exciting future, big steps, already winning. Never use hype, hyped, or hyping. Do not repeat any word twice in the reply.
 
 Pidgin and the word "naija" are allowed ONLY in naija funny style. In francis, supportive, and insights, write plain English, no pidgin, no naija.
 
-Banned (AI, filler, or fancy talk, never use): vibes, vibe, vibing, hype, hyped, hyping, energy, journey, game changer, gamechanger, testament, elevate, unlock, dive, delve, resonate, crucial, seamless, robust, landscape, realm, navigate, leverage, synergy, incredible, amazing, impressive, interesting, insightful, great, great post, love this, spot on, well said, facts, thanks for sharing, appreciate, glad it helped, keep it up, kudos, absolutely, indeed, truly, literally, concise, summary, step forward, this is huge, keep grinding, keep tracking, keep pushing, you got this, exciting future, big steps, already winning, curiosity, insight, insights, resilient, signals, signal, majority, horizons, horizon, fuels, fueling, thrust, victories, victory, shifts, shift, expands, expand, expanding, progress. no fire or rocket emoji, no hashtags, no em/en dashes, no semicolons, no comma splicing two polite clauses. no long hard words.
+Banned AI or empty filler (never use): vibes, vibe, vibing, hype, hyped, hyping, energy, journey, game changer, gamechanger, testament, elevate, unlock, dive, delve, resonate, crucial, seamless, robust, landscape, realm, navigate, leverage, synergy, incredible, amazing, impressive, interesting, insightful, great, great post, love this, spot on, well said, facts, thanks for sharing, appreciate, glad it helped, keep it up, kudos, absolutely, indeed, truly, literally, concise, summary, step forward, this is huge, keep grinding, keep tracking, keep pushing, you got this, exciting future, big steps, already winning, cool, super, wow, yay, awesome, good luck, keep shining, everyday. no fire or rocket emoji, no hashtags, no em/en dashes, no semicolons, no comma splicing two polite clauses.
 
 Style examples only (do not copy topics):
 - your own vault, no middleman
@@ -310,11 +314,9 @@ Style examples only (do not copy topics):
 - happy birthday lekinz
 - good morning teaona
 
-First classify the post (or comment) as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
-Then write a 3-6 word topic summary of the text you are actually replying to.
-Then write one positive reply in the requested style, on that topic, with simple wording and one clear thought.
+First read the post (or comment) carefully. Write "understanding": one sentence on what it actually says or means, and what the poster wants (opinion, question, win, news, gm, thanks, or something else). Classify "tone" as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take. Then write one positive reply in the requested style that directly responds to that understanding, like a smart adult who just read it properly.
 
-Return JSON only: {"tone":"...","topic":"...","reply":"..."}`;
+Return JSON only: {"understanding":"...","tone":"...","reply":"..."}`;
 
 const BANNED_RE = [
   /\bvibes?\b/i,
@@ -367,20 +369,14 @@ const BANNED_RE = [
   /\bbig steps\b/i,
   /\balready winning\b/i,
   /\bhyp(?:e|ed|ing)\b/i,
-  /\bcuriosity\b/i,
-  /\binsights?\b/i,
-  /\bresilien(?:t|ce)\b/i,
-  /\bsignals?\b/i,
-  /\bmajority\b/i,
-  /\bhorizons?\b/i,
-  /\bfuel(?:s|ing)\b/i,
-  /\bthrust\b/i,
-  /\bvictories\b/i,
-  /\bvictory\b/i,
-  /\bshifts?\b/i,
-  /\bshifting\b/i,
-  /\bexpand(?:s|ing)?\b/i,
-  /\bprogress\b/i,
+  /\bcool\b/i,
+  /\bsuper\b/i,
+  /\bwow\b/i,
+  /\byay\b/i,
+  /\bawesome\b/i,
+  /\bgood luck\b/i,
+  /\bkeep shining\b/i,
+  /\beveryday\b/i,
   /[🔥🚀]/,
 ];
 
@@ -509,14 +505,14 @@ function longWords(reply: string, source: string): string[] {
     const core = w.replace(/^\$/, "").replace(/-/g, "");
     if (allowed.has(w) || allowed.has(core) || allowed.has(w.replace(/^\$/, ""))) continue;
     const letters = core.replace(/[^a-z]/g, "");
-    if (letters.length > 9) hits.push(w);
+    if (letters.length > 12) hits.push(w);
   }
   return hits;
 }
 
 function tooComplicated(reply: string, source: string): boolean {
   const words = tokenize(reply);
-  if (words.length < 3 || words.length > 8) return true;
+  if (words.length < 4 || words.length > 12) return true;
   return longWords(reply, source).length > 0;
 }
 
@@ -616,7 +612,13 @@ function extractJson(s: string): any {
   return null;
 }
 
-function parseModelReply(raw: string): { reply: string; tone: string } {
+function cleanUnderstanding(s: string) {
+  let t = s.trim().replace(/^["']|["']$/g, "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  if (t.length > 200) t = t.slice(0, 197) + "…";
+  return t;
+}
+
+function parseModelReply(raw: string): { reply: string; tone: string; understanding: string } {
   try {
     const d = JSON.parse(raw);
     const msg = d?.choices?.[0]?.message || {};
@@ -634,23 +636,24 @@ function parseModelReply(raw: string): { reply: string; tone: string } {
       const o = extractJson(chunk);
       const reply = cleanReply(typeof o?.reply === "string" ? o.reply : "");
       if (reply) {
-        return { reply, tone: normalizePostTone(typeof o?.tone === "string" ? o.tone : "") };
+        const understanding = cleanUnderstanding(typeof o?.understanding === "string" ? o.understanding : "");
+        return { reply, tone: normalizePostTone(typeof o?.tone === "string" ? o.tone : ""), understanding };
       }
     }
-    return { reply: "", tone: "" };
+    return { reply: "", tone: "", understanding: "" };
   } catch {
-    return { reply: "", tone: "" };
+    return { reply: "", tone: "", understanding: "" };
   }
 }
 
-async function writeWithFallback(user: string, sourceText: string, mode: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
+async function writeWithFallback(user: string, sourceText: string, mode: string): Promise<{ reply: string; tone: string; understanding: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
   const attempts: { model: string; fallback: boolean; temperature: number }[] = [
     { model: PRIMARY, fallback: false, temperature: 0.7 },
     { model: PRIMARY, fallback: false, temperature: 0.9 },
     { model: FALLBACK, fallback: true, temperature: 0.85 },
   ];
-  let prompt = user + `\nKeep it simple: 3-8 everyday words a 10-year-old knows, one thought, like a friend talking. One simple shared word with the post is ok; do not copy more than that.`;
-  type Kept = { reply: string; tone: string; model: string; usedFallback: boolean; overlap: number };
+  let prompt = user + `\nRead the post first, then reply to what it actually says. 4-12 mature plain words, like a calm adult. Up to two shared words with the post is ok. Do not write a line that would fit any post.`;
+  type Kept = { reply: string; tone: string; understanding: string; model: string; usedFallback: boolean; overlap: number };
   const kept: Kept[] = [];
   let saw429 = 0;
   let tried = 0;
@@ -670,25 +673,25 @@ async function writeWithFallback(user: string, sourceText: string, mode: string)
     const fancy = tooComplicated(parsed.reply, sourceText);
     if (!banned && !off && !fancy) {
       kept.push({ ...parsed, model: attempt.model, usedFallback: attempt.fallback, overlap: hits.length });
-      if (hits.length <= 1) {
-        return { reply: parsed.reply, tone: parsed.tone, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
+      if (hits.length <= 2) {
+        return { reply: parsed.reply, tone: parsed.tone, understanding: parsed.understanding, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
       }
     }
     if (fancy) {
       const long = longWords(parsed.reply, sourceText);
-      prompt = user + `\nYour last try was too fancy or too long${long.length ? " (" + long.join(", ") + ")" : ""}. Write 3-8 everyday words a 10-year-old knows, one simple thought, like a friend talking.`;
-    } else if (hits.length > 1) {
-      prompt = user + `\nYour last try copied too many words from the post: ${[...new Set(hits)].join(", ")}. Write a simple fresh line. One simple shared word is ok, not more.`;
+      prompt = user + `\nYour last try was too long, too short, or too childish${long.length ? " (" + long.join(", ") + ")" : ""}. Write 4-12 mature plain words that answer this specific post.`;
+    } else if (hits.length > 2) {
+      prompt = user + `\nYour last try copied too many words from the post: ${[...new Set(hits)].join(", ")}. Write a fresh mature line. Up to two shared words is ok.`;
     } else if (banned || off) {
-      prompt = user + `\nYour last try was rejected. Write a simple on-topic line in 3-8 everyday words, no stock phrases, no repeated words.`;
+      prompt = user + `\nYour last try was rejected. Write a mature on-topic line in 4-12 plain words, no stock phrases, no baby talk, no repeated words, and specific to this post.`;
     }
   }
   if (kept.length) {
     kept.sort((a, b) => a.overlap - b.overlap);
     const best = kept[0];
-    return { reply: best.reply, tone: best.tone, model: best.model, usedFallback: best.usedFallback, bothRateLimited: false };
+    return { reply: best.reply, tone: best.tone, understanding: best.understanding, model: best.model, usedFallback: best.usedFallback, bothRateLimited: false };
   }
-  return { reply: "", tone: "", model: PRIMARY, usedFallback: true, bothRateLimited: saw429 === tried && tried > 0 };
+  return { reply: "", tone: "", understanding: "", model: PRIMARY, usedFallback: true, bothRateLimited: saw429 === tried && tried > 0 };
 }
 
 export default async (req: Request) => {
@@ -775,6 +778,7 @@ export default async (req: Request) => {
   return json({
     post,
     reply: out.reply,
+    understanding: out.understanding || "",
     detectedTone: out.tone,
     model: out.model,
     usedFallback: out.usedFallback,
