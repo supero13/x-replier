@@ -292,7 +292,7 @@ Always read the post before you reply. The reply must directly answer your under
 
 Do not copy the post. You may reuse up to two simple words from it. Do not parrot it.
 
-The reply must be specific to this post. If the same line would still make sense under a totally different post, it is too generic — rewrite so it only fits this subject.
+The reply must be specific to this post. If the same line would still make sense under a totally different post, it is too generic — rewrite so it only fits this subject. Do not restate or summarize the post back to them; react or add a short thought instead. If this is a COMMENT, answer the commenter only and do not mention details that appear only in the parent post.
 
 No childish words or baby phrasing (bad: cool, super, wow, yay, awesome, good luck, keep shining, everyday).
 
@@ -322,7 +322,7 @@ const BANNED_RE = [
   /\bvibes?\b/i,
   /\bvibing\b/i,
   /\benergy\b/i,
-  /\bjourney\b/i,
+  /\bjourneys?\b/i,
   /\bgame\s*changers?\b/i,
   /\btestament\b/i,
   /\belevate\b/i,
@@ -671,11 +671,9 @@ async function writeWithFallback(user: string, sourceText: string, mode: string)
     const banned = looksBanned(parsed.reply, mode);
     const off = offTopic(parsed.reply, sourceText);
     const fancy = tooComplicated(parsed.reply, sourceText);
-    if (!banned && !off && !fancy) {
+    if (!banned && !off && !fancy && hits.length <= 2) {
       kept.push({ ...parsed, model: attempt.model, usedFallback: attempt.fallback, overlap: hits.length });
-      if (hits.length <= 2) {
-        return { reply: parsed.reply, tone: parsed.tone, understanding: parsed.understanding, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
-      }
+      return { reply: parsed.reply, tone: parsed.tone, understanding: parsed.understanding, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
     }
     if (fancy) {
       const long = longWords(parsed.reply, sourceText);
