@@ -552,6 +552,16 @@ function offTopic(reply: string, source: string) {
   return false;
 }
 
+function parentLeak(reply: string, commentText: string, parentText: string) {
+  if (!commentText || !parentText) return false;
+  if (!/[a-z]{3,}/i.test(commentText)) return false;
+  for (const w of STYLE_LEAK) {
+    const re = new RegExp(`\b${w}\b`, "i");
+    if (re.test(reply) && re.test(parentText) && !re.test(commentText)) return true;
+  }
+  return false;
+}
+
 function cleanReply(s: string) {
   let t = s.trim().replace(/^["']|["']$/g, "").trim();
   t = t.replace(/#[\w_]+/g, "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
@@ -646,7 +656,7 @@ function parseModelReply(raw: string): { reply: string; tone: string; understand
   }
 }
 
-async function writeWithFallback(user: string, sourceText: string, mode: string): Promise<{ reply: string; tone: string; understanding: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
+async function writeWithFallback(user: string, sourceText: string, mode: string, commentText = "", parentText = ""): Promise<{ reply: string; tone: string; understanding: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
   const attempts: { model: string; fallback: boolean; temperature: number }[] = [
     { model: PRIMARY, fallback: false, temperature: 0.7 },
     { model: PRIMARY, fallback: false, temperature: 0.9 },
@@ -671,7 +681,8 @@ async function writeWithFallback(user: string, sourceText: string, mode: string)
     const banned = looksBanned(parsed.reply, mode);
     const off = offTopic(parsed.reply, sourceText);
     const fancy = tooComplicated(parsed.reply, sourceText);
-    if (!banned && !off && !fancy && hits.length <= 2) {
+    const leak = parentLeak(parsed.reply, commentText, parentText);
+    if (!banned && !off && !fancy && !leak && hits.length <= 2) {
       kept.push({ ...parsed, model: attempt.model, usedFallback: attempt.fallback, overlap: hits.length });
       return { reply: parsed.reply, tone: parsed.tone, understanding: parsed.understanding, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
     }
@@ -680,7 +691,7 @@ async function writeWithFallback(user: string, sourceText: string, mode: string)
       prompt = user + `\nYour last try was too long, too short, or too childish${long.length ? " (" + long.join(", ") + ")" : ""}. Write 4-12 mature plain words that answer this specific post.`;
     } else if (hits.length > 2) {
       prompt = user + `\nYour last try copied too many words from the post: ${[...new Set(hits)].join(", ")}. Write a fresh mature line. Up to two shared words is ok.`;
-    } else if (banned || off) {
+    } else if (banned || off || leak) {
       prompt = user + `\nYour last try was rejected. Write a mature on-topic line in 4-12 plain words, no stock phrases, no baby talk, no repeated words, and specific to this post.`;
     }
   }
@@ -763,7 +774,9 @@ export default async (req: Request) => {
   if (previous) user += `\nDo not repeat this reply: ${JSON.stringify(previous)}`;
 
   const sourceText = [post.text, post.name, post.handle, post.quoted?.text, post.quoted?.handle, post.parent?.text, post.parent?.handle, post.parent?.name].filter(Boolean).join("\n");
-  const out = await writeWithFallback(user, sourceText, tone);
+  const commentText = (post.parent || post.isComment) ? post.text : "";
+  const parentOnly = post.parent?.text || "";
+  const out = await writeWithFallback(user, sourceText, tone, commentText, parentOnly);
 
   if (!out.reply && out.bothRateLimited) {
     return json({
