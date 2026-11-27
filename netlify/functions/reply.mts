@@ -6,7 +6,16 @@ const KEY = process.env.LLM_API_KEY || "";
 const URL_MAX = 400;
 const TEXT_MAX = 2000;
 const BODY_MAX = 4000;
-const TONES = new Set(["francis", "funny", "insightful", "supportive"]);
+const TONES = new Set(["francis", "supportive", "insights", "naija funny"]);
+
+function normalizeMode(raw: unknown) {
+  const k = String(raw || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (k === "supportive") return "supportive";
+  if (k === "insights" || k === "insightful") return "insights";
+  if (k === "naija funny" || k === "naijafunny" || k === "funny") return "naija funny";
+  return "francis";
+}
+
 const HOST_RE = /^(www\.|mobile\.)?(x\.com|twitter\.com)$/i;
 const STATUS_RE = /\/status(?:es)?\/(\d{2,20})(?:[/?#]|$)/i;
 
@@ -255,29 +264,33 @@ function normalizePostTone(raw: string) {
 
 function toneHint(mode: string) {
   switch (mode) {
-    case "funny":
-      return "style override: funnier, still his phone-typing voice, 3-10 words. stay on this post's exact topic.";
-    case "insightful":
-      return "style override: one sharp point already in the post, still casual and short. no new topics.";
     case "supportive":
-      return "style override: warm but deadpan, 3-10 words, respond to what they actually said.";
+      return "style: supportive. warm encouragement, still short and human, 3-10 words. positive only. no pidgin, no naija, no sarcasm.";
+    case "insights":
+      return "style: insights. add one short, accurate, positive point drawn only from this post. no new facts. no pidgin, no naija.";
+    case "naija funny":
+      return "style: naija funny. light nigerian humor or light pidgin, positive and on-topic, never mocking. 3-10 words.";
     default:
-      return "style: francis. 3-10 words. respond to this post's main point only. do not add new topics.";
+      return "style: francis. dry deadpan but positive and encouraging. 3-10 words. no pidgin, no naija, no sarcasm, no doom.";
   }
 }
 
 const SYSTEM = `You write one X reply as Francis (@FrancisJD13), a nigerian crypto guy typing fast on his phone.
 
-Stay on topic (this is the most important rule):
-- Reply directly to the exact post text you are given. If this is a COMMENT, reply to the commenter's own words, not a recap of the parent post. The parent is background only.
-- If a comment is only @mentions or media, you may react to the parent. If the comment has its own message (thanks, a question, a joke, an opinion), answer that message.
+Every reply must be positive and encouraging toward the poster. No savage, sarcastic, negative, mocking, or doom lines (bad: "survive or die fr"). Lift the poster up while staying honest.
+
+Stay on topic:
+- Reply directly to the exact post text. If this is a COMMENT, reply to the commenter's own words, not a recap of the parent. Parent is background only.
+- If a comment is only @mentions or media, you may react to the parent. If the comment has its own message, answer that message.
 - Every reply must clearly relate to that text's main point.
 - Never introduce topics, coins, numbers, names, or details that are not already in the post (or parent, as background).
-- The style examples below are for STYLE only (short, casual, deadpan). Never reuse their topics or wording. Do not mention vaults, solana, watchlists, spins, birthdays, outflows, or anything from the examples unless the current post itself is about that.
+- The style examples below are for STYLE only. Never reuse their topics or wording unless the current post is about that.
 
-Voice: all lowercase, casual, deadpan, opinionated. 100% human, never like an AI assistant. 3-10 words, one line, no period, no hashtags, no brackets, no questions. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. light pidgin only rarely (e.g. "e go be"). 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
+Voice: all lowercase, casual, human, 3-10 words, one line, no period, no hashtags, no brackets, no questions. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
 
-Banned (sounds like AI, never use): "thanks for sharing", "great", "impressive", "interesting", "insightful", "glad it helped", "appreciate", "step forward", "concise", "summary", "indeed", "game changer", "this is huge", "well said". no em dashes, en dashes, or fancy punctuation. no semicolons. no comma splicing two polite clauses.
+Pidgin and the word "naija" are allowed ONLY in naija funny style. In francis, supportive, and insights, write plain English, no pidgin, no naija.
+
+Banned (AI or empty hype, never use): vibes, vibe, vibing, energy, journey, game changer, gamechanger, testament, elevate, unlock, dive, delve, resonate, crucial, seamless, robust, landscape, realm, navigate, leverage, synergy, incredible, amazing, impressive, interesting, insightful, great, great post, love this, spot on, well said, facts, thanks for sharing, appreciate, glad it helped, keep it up, kudos, absolutely, indeed, truly, literally, concise, summary, step forward, this is huge. no fire or rocket emoji, no hashtags, no em/en dashes, no semicolons, no comma splicing two polite clauses.
 
 Style examples only (do not copy topics):
 - your own vault, no middleman
@@ -291,27 +304,89 @@ Style examples only (do not copy topics):
 - happy birthday lekinz
 - good morning teaona
 
-First classify the post (or comment) tone as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
-Then write a 3-6 word topic summary of the text you are actually replying to (the comment, if this is a comment; otherwise the post).
-Then write one reply in Francis's voice that matches that tone and that topic.
+First classify the post (or comment) as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
+Then write a 3-6 word topic summary of the text you are actually replying to.
+Then write one positive reply in the requested style, on that topic.
 
 Return JSON only: {"tone":"...","topic":"...","reply":"..."}`;
 
 const BANNED_RE = [
-  /\bthanks for sharing\b/i,
-  /\bgreat\b/i,
+  /\bvibes?\b/i,
+  /\bvibing\b/i,
+  /\benergy\b/i,
+  /\bjourney\b/i,
+  /\bgame\s*changers?\b/i,
+  /\btestament\b/i,
+  /\belevate\b/i,
+  /\bunlock\b/i,
+  /\bdive\b/i,
+  /\bdelve\b/i,
+  /\bresonate\b/i,
+  /\bcrucial\b/i,
+  /\bseamless\b/i,
+  /\brobust\b/i,
+  /\blandscape\b/i,
+  /\brealm\b/i,
+  /\bnavigate\b/i,
+  /\bleverage\b/i,
+  /\bsynergy\b/i,
+  /\bincredible\b/i,
+  /\bamazing\b/i,
   /\bimpressive\b/i,
   /\binteresting\b/i,
   /\binsightful\b/i,
-  /\bglad it helped\b/i,
+  /\bgreat\b/i,
+  /\blove this\b/i,
+  /\bspot on\b/i,
+  /\bwell said\b/i,
+  /\bfacts\b/i,
+  /\bthanks for sharing\b/i,
   /\bappreciate\b/i,
-  /\bstep forward\b/i,
+  /\bglad it helped\b/i,
+  /\bkeep it up\b/i,
+  /\bkudos\b/i,
+  /\babsolutely\b/i,
+  /\bindeed\b/i,
+  /\btruly\b/i,
+  /\bliterally\b/i,
   /\bconcise\b/i,
   /\bsummary\b/i,
-  /\bindeed\b/i,
-  /\bgame changer\b/i,
+  /\bstep forward\b/i,
   /\bthis is huge\b/i,
-  /\bwell said\b/i,
+  /[🔥🚀]/,
+];
+
+const NEGATIVE_RE = [
+  /\bor die\b/i,
+  /\bdoomed?\b/i,
+  /\bcooked\b/i,
+  /\byou're finished\b/i,
+  /\bshut up\b/i,
+  /\bstupid\b/i,
+  /\bidiot\b/i,
+  /\btrash\b/i,
+  /\bgarbage\b/i,
+];
+
+const NAIJA_RE = [
+  /\bnaija\b/i,
+  /\bpidgin\b/i,
+  /\be go be\b/i,
+  /\babeg\b/i,
+  /\bwahala\b/i,
+  /\boya\b/i,
+  /\bhow far\b/i,
+  /\bno be\b/i,
+  /\b\w+ dey\b/i,
+  /\buna\b/i,
+  /\bsha\b/i,
+  /\bna so\b/i,
+  /\be be\b/i,
+  /\bjare\b/i,
+  /\bbiko\b/i,
+  /\bwetin\b/i,
+  /\bcomot\b/i,
+  /\bomo\b/i,
 ];
 
 const STYLE_LEAK = [
@@ -319,10 +394,12 @@ const STYLE_LEAK = [
   "outflows", "minting", "lekinz", "teaona", "spins", "fbyt", "fbytio",
 ];
 
-function looksBanned(s: string) {
+function looksBanned(s: string, mode = "francis") {
   const t = s.toLowerCase();
   if (BANNED_RE.some((r) => r.test(t))) return true;
+  if (NEGATIVE_RE.some((r) => r.test(t))) return true;
   if (/,/.test(t) && /\b(thanks|thank you|appreciate|glad|great|awesome|amazing)\b/.test(t)) return true;
+  if (mode !== "naija funny" && NAIJA_RE.some((r) => r.test(t))) return true;
   return false;
 }
 
@@ -360,8 +437,10 @@ function cleanReply(s: string) {
   t = t.replace(/[\u201C\u201D]/g, '"');
   t = t.replace(/\u2026/g, "...");
   t = t.replace(/;/g, ",");
+  t = t.replace(/[🔥🚀]/g, "");
   t = t.toLowerCase();
   t = t.replace(/[.]+$/g, "").trim();
+  t = t.replace(/\s+/g, " ").trim();
   return t;
 }
 
@@ -437,7 +516,7 @@ function parseModelReply(raw: string): { reply: string; tone: string } {
   }
 }
 
-async function writeWithFallback(user: string, sourceText: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
+async function writeWithFallback(user: string, sourceText: string, mode: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
   const attempts: { model: string; fallback: boolean }[] = [
     { model: PRIMARY, fallback: false },
     { model: FALLBACK, fallback: true },
@@ -451,7 +530,7 @@ async function writeWithFallback(user: string, sourceText: string): Promise<{ re
     }
     if (result.status !== 200) continue;
     const parsed = parseModelReply(result.raw);
-    if (parsed.reply && !looksBanned(parsed.reply) && !offTopic(parsed.reply, sourceText)) {
+    if (parsed.reply && !looksBanned(parsed.reply, mode) && !offTopic(parsed.reply, sourceText)) {
       return { ...parsed, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
     }
   }
@@ -469,7 +548,7 @@ export default async (req: Request) => {
   } catch {
     return json({ error: "Bad JSON." }, 400);
   }
-  const tone = TONES.has(body.tone) ? body.tone : "francis";
+  const tone = normalizeMode(body.tone);
   const previous = typeof body.previous === "string" ? body.previous.slice(0, 280) : "";
   const urlIn = typeof body.url === "string" ? body.url.trim() : "";
   const textIn = typeof body.text === "string" ? body.text.trim() : "";
@@ -529,7 +608,7 @@ export default async (req: Request) => {
   if (previous) user += `\nDo not repeat this reply: ${JSON.stringify(previous)}`;
 
   const sourceText = [post.text, post.name, post.handle, post.quoted?.text, post.quoted?.handle, post.parent?.text, post.parent?.handle, post.parent?.name].filter(Boolean).join("\n");
-  const out = await writeWithFallback(user, sourceText);
+  const out = await writeWithFallback(user, sourceText, tone);
 
   if (!out.reply && out.bothRateLimited) {
     return json({
