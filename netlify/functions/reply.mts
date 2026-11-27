@@ -556,7 +556,7 @@ function parentLeak(reply: string, commentText: string, parentText: string) {
   if (!commentText || !parentText) return false;
   if (!/[a-z]{3,}/i.test(commentText)) return false;
   for (const w of STYLE_LEAK) {
-    const re = new RegExp(`\b${w}\b`, "i");
+    const re = new RegExp(`\\b${w}\\b`, "i");
     if (re.test(reply) && re.test(parentText) && !re.test(commentText)) return true;
   }
   return false;
