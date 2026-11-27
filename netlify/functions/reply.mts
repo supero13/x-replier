@@ -265,13 +265,13 @@ function normalizePostTone(raw: string) {
 function toneHint(mode: string) {
   switch (mode) {
     case "supportive":
-      return "style: supportive. warm encouragement, still short and human, 3-10 words. positive only. no pidgin, no naija, no sarcasm.";
+      return "style: supportive. warm personal encouragement aimed at the poster, 3-10 words. cheer them, do not restate the post. no pidgin, no naija, no sarcasm.";
     case "insights":
-      return "style: insights. add one short, accurate, positive point drawn only from this post. no new facts. no pidgin, no naija.";
+      return "style: insights. one short smart takeaway or implication the post itself did not say, still grounded only in that post, no new facts or numbers. 3-10 words. no pidgin, no naija. do not reuse the post's wording.";
     case "naija funny":
-      return "style: naija funny. light nigerian humor or light pidgin, positive and on-topic, never mocking. 3-10 words.";
+      return "style: naija funny. light nigerian pidgin humor, positive and on-topic, never mocking. 3-10 words. a funny angle, not a recap, no repeated post wording.";
     default:
-      return "style: francis. dry deadpan but positive and encouraging. 3-10 words. no pidgin, no naija, no sarcasm, no doom.";
+      return "style: francis. dry deadpan witty positive one-liner, 3-10 words. a dry witty angle, not a recap. no pidgin, no naija, no sarcasm, no doom.";
   }
 }
 
@@ -288,9 +288,15 @@ Stay on topic:
 
 Voice: all lowercase, casual, human, 3-10 words, one line, no period, no hashtags, no brackets, no questions. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
 
+Do not echo or parrot the post. Never reuse the post's content words (bad: post says "tracking" or "survive" or "data" and the reply repeats them). Write a fresh line with new wording.
+
+Add something new: a fresh angle, your own insight, encouragement, or light humor in the requested style, still on-topic and positive. Never invent facts or numbers.
+
+Never use these stock lines: keep grinding, keep tracking, keep pushing, you got this, exciting future, big steps, already winning. Never use hype, hyped, or hyping. Do not repeat any word twice in the reply.
+
 Pidgin and the word "naija" are allowed ONLY in naija funny style. In francis, supportive, and insights, write plain English, no pidgin, no naija.
 
-Banned (AI or empty hype, never use): vibes, vibe, vibing, energy, journey, game changer, gamechanger, testament, elevate, unlock, dive, delve, resonate, crucial, seamless, robust, landscape, realm, navigate, leverage, synergy, incredible, amazing, impressive, interesting, insightful, great, great post, love this, spot on, well said, facts, thanks for sharing, appreciate, glad it helped, keep it up, kudos, absolutely, indeed, truly, literally, concise, summary, step forward, this is huge. no fire or rocket emoji, no hashtags, no em/en dashes, no semicolons, no comma splicing two polite clauses.
+Banned (AI or empty filler, never use): vibes, vibe, vibing, hype, hyped, hyping, energy, journey, game changer, gamechanger, testament, elevate, unlock, dive, delve, resonate, crucial, seamless, robust, landscape, realm, navigate, leverage, synergy, incredible, amazing, impressive, interesting, insightful, great, great post, love this, spot on, well said, facts, thanks for sharing, appreciate, glad it helped, keep it up, kudos, absolutely, indeed, truly, literally, concise, summary, step forward, this is huge, keep grinding, keep tracking, keep pushing, you got this, exciting future, big steps, already winning. no fire or rocket emoji, no hashtags, no em/en dashes, no semicolons, no comma splicing two polite clauses.
 
 Style examples only (do not copy topics):
 - your own vault, no middleman
@@ -306,7 +312,7 @@ Style examples only (do not copy topics):
 
 First classify the post (or comment) as exactly one of: joke, win, sad, rant, news, question, advice, shill, hot take.
 Then write a 3-6 word topic summary of the text you are actually replying to.
-Then write one positive reply in the requested style, on that topic.
+Then write one positive reply in the requested style, on that topic, with new wording and a new angle.
 
 Return JSON only: {"tone":"...","topic":"...","reply":"..."}`;
 
@@ -353,6 +359,14 @@ const BANNED_RE = [
   /\bsummary\b/i,
   /\bstep forward\b/i,
   /\bthis is huge\b/i,
+  /\bkeep grinding\b/i,
+  /\bkeep tracking\b/i,
+  /\bkeep pushing\b/i,
+  /\byou got this\b/i,
+  /\bexciting future\b/i,
+  /\bbig steps\b/i,
+  /\balready winning\b/i,
+  /\bhyp(?:e|ed|ing)\b/i,
   /[🔥🚀]/,
 ];
 
@@ -394,12 +408,93 @@ const STYLE_LEAK = [
   "outflows", "minting", "lekinz", "teaona", "spins", "fbyt", "fbytio",
 ];
 
+const STOPWORDS = new Set([
+  "a","an","the","and","or","but","if","to","of","in","on","for","at","by","is","it","as","be",
+  "we","you","your","yours","our","ours","they","them","their","this","that","with","from","are",
+  "was","were","been","being","have","has","had","do","does","did","will","would","can","could",
+  "should","just","not","no","so","than","then","too","very","also","into","over","after","before",
+  "about","up","out","off","its","it's","im","ive","id","ill","dont","cant","wont","youre","youve",
+  "youll","thats","theres","heres","whats","whos","lets","like","more","some","only","even","back",
+  "here","when","what","which","who","how","why","all","any","each","few","most","other","such",
+  "own","same","than","too","via","per","plus","vs","etc","one","two","still","already","now",
+]);
+
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9$]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function stem(w: string): string {
+  let t = w.toLowerCase();
+  if (t.length <= 3) return t;
+  if (t.endsWith("ies") && t.length > 5) t = t.slice(0, -3) + "y";
+  else if (t.endsWith("ing") && t.length > 5) t = t.slice(0, -3);
+  else if (t.endsWith("ed") && t.length > 5) t = t.slice(0, -2);
+  else if (t.endsWith("es") && t.length > 5) t = t.slice(0, -2);
+  else if (t.endsWith("s") && !t.endsWith("ss") && t.length > 4) t = t.slice(0, -1);
+  if (t.endsWith("e") && t.length > 5) t = t.slice(0, -1);
+  if (t.length > 5 && /(.)\1$/.test(t)) t = t.slice(0, -1);
+  return t;
+}
+
+function contentWords(s: string): string[] {
+  return tokenize(s).filter((w) => w.length > 3 && !STOPWORDS.has(w));
+}
+
+function properNouns(s: string): Set<string> {
+  const out = new Set<string>();
+  const raw = s.replace(/['’]/g, "").split(/[^A-Za-z0-9$-]+/).filter(Boolean);
+  for (const tok of raw) {
+    const hadDollar = tok.startsWith("$");
+    const core = tok.replace(/^\$/, "");
+    if (!core || /^\d+$/.test(core)) continue;
+    const upper = /^[A-Z0-9-]{2,}$/.test(core) && /[A-Z]/.test(core);
+    const named = /[A-Za-z]/.test(core) && /\d/.test(core);
+    if (hadDollar || upper || named) {
+      const k = core.toLowerCase();
+      out.add(k);
+      out.add(k.replace(/-/g, ""));
+    }
+  }
+  return out;
+}
+
+function repeatedWord(s: string): boolean {
+  const seen = new Set<string>();
+  for (const w of tokenize(s)) {
+    if (seen.has(w)) return true;
+    seen.add(w);
+  }
+  return false;
+}
+
+function overlapWords(reply: string, source: string): string[] {
+  const sourceStems = new Set(contentWords(source).map(stem));
+  const allowed = properNouns(source);
+  const replyContent = contentWords(reply);
+  const counts = new Map<string, number>();
+  for (const w of replyContent) counts.set(w, (counts.get(w) || 0) + 1);
+  const hits: string[] = [];
+  for (const w of replyContent) {
+    if (!sourceStems.has(stem(w))) continue;
+    if (allowed.has(w) && (counts.get(w) || 0) <= 1) continue;
+    hits.push(w);
+  }
+  return hits;
+}
+
 function looksBanned(s: string, mode = "francis") {
   const t = s.toLowerCase();
   if (BANNED_RE.some((r) => r.test(t))) return true;
   if (NEGATIVE_RE.some((r) => r.test(t))) return true;
   if (/,/.test(t) && /\b(thanks|thank you|appreciate|glad|great|awesome|amazing)\b/.test(t)) return true;
   if (mode !== "naija funny" && NAIJA_RE.some((r) => r.test(t))) return true;
+  if (repeatedWord(s)) return true;
   return false;
 }
 
@@ -444,7 +539,7 @@ function cleanReply(s: string) {
   return t;
 }
 
-async function groqChat(model: string, user: string) {
+async function groqChat(model: string, user: string, temperature = 0.7) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 5000);
   try {
@@ -454,7 +549,7 @@ async function groqChat(model: string, user: string) {
       headers: { "content-type": "application/json", authorization: `Bearer ${KEY}` },
       body: JSON.stringify({
         model,
-        temperature: 0.7,
+        temperature,
         max_tokens: 256,
         reasoning_effort: "low",
         response_format: { type: "json_object" },
@@ -517,24 +612,51 @@ function parseModelReply(raw: string): { reply: string; tone: string } {
 }
 
 async function writeWithFallback(user: string, sourceText: string, mode: string): Promise<{ reply: string; tone: string; model: string; usedFallback: boolean; bothRateLimited: boolean }> {
-  const attempts: { model: string; fallback: boolean }[] = [
-    { model: PRIMARY, fallback: false },
-    { model: FALLBACK, fallback: true },
+  const attempts: { model: string; fallback: boolean; temperature: number }[] = [
+    { model: PRIMARY, fallback: false, temperature: 0.7 },
+    { model: PRIMARY, fallback: false, temperature: 0.9 },
+    { model: FALLBACK, fallback: true, temperature: 0.85 },
   ];
+  const bannedWords = [...new Set(contentWords(sourceText))].slice(0, 40);
+  let prompt = user;
+  if (bannedWords.length) {
+    prompt += `\nDo not reuse any of these words from the post: ${bannedWords.join(", ")}.`;
+  }
+  type Kept = { reply: string; tone: string; model: string; usedFallback: boolean; overlap: number };
+  const kept: Kept[] = [];
   let saw429 = 0;
+  let tried = 0;
   for (const attempt of attempts) {
-    const result = await groqChat(attempt.model, user);
+    const result = await groqChat(attempt.model, prompt, attempt.temperature);
+    tried += 1;
     if (result.status === 429) {
       saw429 += 1;
       continue;
     }
     if (result.status !== 200) continue;
     const parsed = parseModelReply(result.raw);
-    if (parsed.reply && !looksBanned(parsed.reply, mode) && !offTopic(parsed.reply, sourceText)) {
-      return { ...parsed, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
+    if (!parsed.reply) continue;
+    const hits = overlapWords(parsed.reply, sourceText);
+    const banned = looksBanned(parsed.reply, mode);
+    const off = offTopic(parsed.reply, sourceText);
+    if (!banned && !off) {
+      kept.push({ ...parsed, model: attempt.model, usedFallback: attempt.fallback, overlap: hits.length });
+      if (hits.length === 0) {
+        return { reply: parsed.reply, tone: parsed.tone, model: attempt.model, usedFallback: attempt.fallback, bothRateLimited: false };
+      }
+    }
+    if (hits.length) {
+      prompt = user + `\nDo not reuse any of these words from the post: ${bannedWords.join(", ")}.\nYour last try repeated: ${[...new Set(hits)].join(", ")}. Write a fresh line with none of those words and no other words from the post.`;
+    } else if (banned || off) {
+      prompt = user + `\nDo not reuse any of these words from the post: ${bannedWords.join(", ")}.\nYour last try was rejected. Write a fresh on-topic line with new wording, no stock phrases, and no repeated words.`;
     }
   }
-  return { reply: "", tone: "", model: PRIMARY, usedFallback: true, bothRateLimited: saw429 === attempts.length };
+  if (kept.length) {
+    kept.sort((a, b) => a.overlap - b.overlap);
+    const best = kept[0];
+    return { reply: best.reply, tone: best.tone, model: best.model, usedFallback: best.usedFallback, bothRateLimited: false };
+  }
+  return { reply: "", tone: "", model: PRIMARY, usedFallback: true, bothRateLimited: saw429 === tried && tried > 0 };
 }
 
 export default async (req: Request) => {
