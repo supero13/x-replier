@@ -2,7 +2,7 @@
 
 Paste an X post link and get one reply in Francis's voice. Copy it or open it on X. Nothing posts itself.
 
-Live app: https://francis-replies.netlify.app
+Live app: https://francis-replies.vercel.app
 
 ## Use it
 1. Open the site on your phone (Brave or Chrome).
@@ -14,7 +14,7 @@ Live app: https://francis-replies.netlify.app
 If a post can't be loaded, paste the text in the box and generate anyway.
 
 ## Stack
-- Static frontend + one Netlify Function
+- Static frontend + one Vercel Function
 - Post text from fxtwitter / vxtwitter / Twitter oEmbed (no X API key)
 - Replies from Groq's free OpenAI-compatible API
 
@@ -25,7 +25,7 @@ If a post can't be loaded, paste the text in the box and generate anyway.
 
 `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` were shut down on Groq's free/developer tier on 16 Aug 2026.
 
-Set these as Netlify environment variables (never commit them):
+Set these as Vercel environment variables (never commit them):
 
 - `LLM_API_KEY`
 - `LLM_BASE_URL` (`https://api.groq.com/openai/v1`)
