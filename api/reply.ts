@@ -267,13 +267,13 @@ function normalizePostTone(raw: string) {
 function toneHint(mode: string) {
   switch (mode) {
     case "supportive":
-      return "style: supportive. warm adult encouragement that only fits this post, 4-12 plain words. cheer the poster about what they actually said. no pidgin, no naija, no sarcasm, no baby talk.";
+      return "style: supportive. warm adult encouragement that only fits this post, 3-5 plain words. cheer the poster about what they actually said. no pidgin, no naija, no sarcasm, no baby talk.";
     case "insights":
-      return "style: insights. a short mature takeaway from having actually read the post, still grounded only in that post, no new facts or numbers. 4-12 plain words. no pidgin, no naija.";
+      return "style: insights. a short mature takeaway from having actually read the post, still grounded only in that post, no new facts or numbers. 3-5 plain words. no pidgin, no naija.";
     case "naija funny":
-      return "style: naija funny. mature nigerian pidgin humor, positive and on-topic, never mocking or childish. 4-12 words. a funny angle that only fits this post, not a recap.";
+      return "style: naija funny. mature nigerian pidgin humor, positive and on-topic, never mocking or childish. 3-5 words. a funny angle that only fits this post, not a recap.";
     default:
-      return "style: francis. dry deadpan, mature, thoughtful, like a calm grown man on crypto/X. 4-12 plain words that answer what this post actually says. no pidgin, no naija, no sarcasm, no doom, no baby talk.";
+      return "style: francis. dry deadpan, mature, thoughtful, like a calm grown man on crypto/X. 3-5 plain words that answer what this post actually says. no pidgin, no naija, no sarcasm, no doom, no baby talk.";
   }
 }
 
@@ -288,7 +288,7 @@ Stay on topic:
 - Never introduce topics, coins, numbers, names, or details that are not already in the post (or parent, as background).
 - The style examples below are for STYLE only. Never reuse their topics or wording unless the current post is about that.
 
-Voice: all lowercase, casual, human, 4-12 words, one line, no period, no hashtags, no brackets, no questions. Write like a calm grown man: mature, thoughtful, plain everyday words, no jargon, no baby talk. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
+Voice: all lowercase, casual, human, 3-5 words, one line, no period, no hashtags, no brackets, no questions. Write like a calm grown man: mature, thoughtful, plain everyday words, no jargon, no baby talk. abbreviations, dropped words, lol, nah, fr, bro, ngl are fine. 😭 is rare. never invent facts or numbers. never beg for follows. never just agree.
 
 Always read the post before you reply. The reply must directly answer your understanding of what the post says and what the poster wants. If the post asks a question, answer it.
 
@@ -514,7 +514,7 @@ function longWords(reply: string, source: string): string[] {
 
 function tooComplicated(reply: string, source: string): boolean {
   const words = tokenize(reply);
-  if (words.length < 4 || words.length > 12) return true;
+  if (words.length < 3 || words.length > 5) return true;
   return longWords(reply, source).length > 0;
 }
 
@@ -664,7 +664,7 @@ async function writeWithFallback(user: string, sourceText: string, mode: string,
     { model: PRIMARY, fallback: false, temperature: 0.9 },
     { model: FALLBACK, fallback: true, temperature: 0.85 },
   ];
-  let prompt = user + `\nRead the post first, then reply to what it actually says. 4-12 mature plain words, like a calm adult. Up to two shared words with the post is ok. Do not write a line that would fit any post.`;
+  let prompt = user + `\nRead the post first, then reply to what it actually says. 3-5 mature plain words, like a calm adult. Up to two shared words with the post is ok. Do not write a line that would fit any post.`;
   type Kept = { reply: string; tone: string; understanding: string; model: string; usedFallback: boolean; overlap: number };
   const kept: Kept[] = [];
   let saw429 = 0;
@@ -690,11 +690,11 @@ async function writeWithFallback(user: string, sourceText: string, mode: string,
     }
     if (fancy) {
       const long = longWords(parsed.reply, sourceText);
-      prompt = user + `\nYour last try was too long, too short, or too childish${long.length ? " (" + long.join(", ") + ")" : ""}. Write 4-12 mature plain words that answer this specific post.`;
+      prompt = user + `\nYour last try was too long, too short, or too childish${long.length ? " (" + long.join(", ") + ")" : ""}. Write 3-5 mature plain words that answer this specific post.`;
     } else if (hits.length > 2) {
       prompt = user + `\nYour last try copied too many words from the post: ${[...new Set(hits)].join(", ")}. Write a fresh mature line. Up to two shared words is ok.`;
     } else if (banned || off || leak) {
-      prompt = user + `\nYour last try was rejected. Write a mature on-topic line in 4-12 plain words, no stock phrases, no baby talk, no repeated words, and specific to this post.`;
+      prompt = user + `\nYour last try was rejected. Write a mature on-topic line in 3-5 plain words, no stock phrases, no baby talk, no repeated words, and specific to this post.`;
     }
   }
   if (kept.length) {
